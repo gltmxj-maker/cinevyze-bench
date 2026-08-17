@@ -1,0 +1,18 @@
+{
+  "schema": "numunit-conversion/1.0",
+  "authored": "2026-08-16",
+  "note": "한국어 큰 수 단위 변환 테스트. 한국어는 만·억·조로 네 자리씩 끊고 쉼표는 세 자리마다 찍는다. 이 어긋남에서 나오는 오류를 잰다. 정답은 numunit_score.py의 format/expected 함수가 값에서 결정론적으로 만들어낸다 — 케이스 파일에 정답 문자열을 손으로 적지 않는 이유는, 프롬프트가 요구하는 형식과 채점 기준이 어긋나는 사고가 바로 거기서 나기 때문이다.",
+  "tasks": ["digit_to_ko", "ko_to_digit", "comma", "won_round"],
+  "values": [
+    { "id": "N06a", "digits": 6, "value": 123456, "note": "만 단위 기본" },
+    { "id": "N06b", "digits": 6, "value": 900000, "note": "90만 — 한 단위만 채워짐" },
+    { "id": "N08a", "digits": 8, "value": 12345678, "note": "천만 단위 기본" },
+    { "id": "N08b", "digits": 8, "value": 10000000, "note": "1000만 정확히 — 자리올림 경계" },
+    { "id": "N10a", "digits": 10, "value": 1234567890, "note": "억 단위 기본" },
+    { "id": "N10b", "digits": 10, "value": 1000500000, "note": "10억 50만 — 중간 0단위 생략 함정" },
+    { "id": "N12a", "digits": 12, "value": 123456789012, "note": "천억 단위 기본" },
+    { "id": "N12b", "digits": 12, "value": 100000000000, "note": "1000억 정확히 — 자리올림 경계" },
+    { "id": "N14a", "digits": 14, "value": 12345678901234, "note": "조 단위 기본" },
+    { "id": "N14b", "digits": 14, "value": 10000000050000, "note": "10조 5만 — 단위 두 칸 건너뜀 함정" }
+  ]
+}

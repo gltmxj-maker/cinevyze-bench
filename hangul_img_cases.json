@@ -1,0 +1,12 @@
+{
+  "note": "IMG-02(이미지 내 텍스트 렌더링)의 문자 체계 축. 프롬프트 틀·글자 수를 맞춘 한글/영문 쌍만 둔다. 정답은 요청한 문자열 자체다.",
+  "prompt_template": "A simple poster with the exact text '{text}' in bold sans-serif, centered, plain background",
+  "pairs": [
+    {"pair_id": "W1", "ko": "사랑", "en": "LOVE",   "ko_chars": 2, "en_chars": 4},
+    {"pair_id": "W2", "ko": "커피", "en": "CAFE",   "ko_chars": 2, "en_chars": 4},
+    {"pair_id": "W3", "ko": "학교", "en": "SCHOOL", "ko_chars": 2, "en_chars": 6},
+    {"pair_id": "W4", "ko": "행복", "en": "HAPPY",  "ko_chars": 2, "en_chars": 5},
+    {"pair_id": "W5", "ko": "바다", "en": "OCEAN",  "ko_chars": 2, "en_chars": 5},
+    {"pair_id": "W6", "ko": "서울", "en": "SEOUL",  "ko_chars": 2, "en_chars": 5}
+  ]
+}

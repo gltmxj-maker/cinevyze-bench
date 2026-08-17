@@ -1,0 +1,85 @@
+{
+  "version": "1.0",
+  "created": "2026-07-29",
+  "description": "JSON·CSV·마크다운 표 출력 형식 비교용 고정 한국어 사례. 모든 정답은 단일 스칼라 스키마다.",
+  "tasks": {
+    "FMT-01": {
+      "name": "고객 문의 분류",
+      "fields": ["id", "category"],
+      "cases": [
+        {"id": "Q01", "input": "결제한 주문을 취소하고 돈을 돌려받고 싶습니다.", "expected": {"id": "Q01", "category": "환불"}},
+        {"id": "Q02", "input": "택배가 예정일을 사흘 넘겼는데 아직 도착하지 않았어요.", "expected": {"id": "Q02", "category": "배송"}},
+        {"id": "Q03", "input": "받은 셔츠가 너무 작아서 큰 사이즈로 바꾸고 싶습니다.", "expected": {"id": "Q03", "category": "교환"}},
+        {"id": "Q04", "input": "이 노트북 거치대는 17인치 제품도 올릴 수 있나요?", "expected": {"id": "Q04", "category": "상품문의"}},
+        {"id": "Q05", "input": "회원 탈퇴 메뉴가 어디에 있는지 알려주세요.", "expected": {"id": "Q05", "category": "기타"}},
+        {"id": "Q06", "input": "배송지 주소를 잘못 적었습니다. 출고 전에 수정해 주세요.", "expected": {"id": "Q06", "category": "배송"}},
+        {"id": "Q07", "input": "박스는 열지 않았고 구매 금액 전액을 환불받으려 합니다.", "expected": {"id": "Q07", "category": "환불"}},
+        {"id": "Q08", "input": "검정색을 주문했는데 흰색이 왔습니다. 검정색으로 교환해 주세요.", "expected": {"id": "Q08", "category": "교환"}},
+        {"id": "Q09", "input": "무선 키보드 배터리는 한 번 충전하면 몇 시간 가나요?", "expected": {"id": "Q09", "category": "상품문의"}},
+        {"id": "Q10", "input": "비밀번호 재설정 메일이 오지 않습니다.", "expected": {"id": "Q10", "category": "기타"}},
+        {"id": "Q11", "input": "주문번호 A-104의 송장 번호를 확인하고 싶어요.", "expected": {"id": "Q11", "category": "배송"}},
+        {"id": "Q12", "input": "상품을 반품했으니 카드 결제를 취소해 주세요.", "expected": {"id": "Q12", "category": "환불"}},
+        {"id": "Q13", "input": "왼쪽 이어폰이 작동하지 않아 정상 제품으로 바꾸고 싶습니다.", "expected": {"id": "Q13", "category": "교환"}},
+        {"id": "Q14", "input": "이 충전기는 USB-C PD 65W를 지원합니까?", "expected": {"id": "Q14", "category": "상품문의"}},
+        {"id": "Q15", "input": "현금영수증 발급 정보를 변경할 수 있나요?", "expected": {"id": "Q15", "category": "기타"}},
+        {"id": "Q16", "input": "오늘 출고라고 표시됐는데 어느 택배사로 보내나요?", "expected": {"id": "Q16", "category": "배송"}},
+        {"id": "Q17", "input": "중복 결제된 두 건 중 한 건을 환불해 주세요.", "expected": {"id": "Q17", "category": "환불"}},
+        {"id": "Q18", "input": "머그컵 손잡이가 깨져 도착했습니다. 새 상품으로 교환 바랍니다.", "expected": {"id": "Q18", "category": "교환"}},
+        {"id": "Q19", "input": "방수 등급 IPX7은 물에 잠겨도 된다는 뜻인가요?", "expected": {"id": "Q19", "category": "상품문의"}},
+        {"id": "Q20", "input": "사업자용 세금계산서를 발행하려면 어떤 정보가 필요한가요?", "expected": {"id": "Q20", "category": "기타"}}
+      ]
+    },
+    "FMT-02": {
+      "name": "발주 정보 추출",
+      "fields": ["id", "vendor", "item", "quantity", "unit_price", "due_date"],
+      "cases": [
+        {"id": "O01", "input": "한빛상사에 복사용지 A4 120상자를 장당 단가 23500원으로 발주하며 납기일은 2026년 8월 3일입니다.", "expected": {"id": "O01", "vendor": "한빛상사", "item": "복사용지 A4", "quantity": 120, "unit_price": 23500, "due_date": "2026-08-03"}},
+        {"id": "O02", "input": "납품 요청: 새봄유통 / 품목 무선마우스 M20 / 수량 45개 / 단가 18900원 / 2026-08-05까지.", "expected": {"id": "O02", "vendor": "새봄유통", "item": "무선마우스 M20", "quantity": 45, "unit_price": 18900, "due_date": "2026-08-05"}},
+        {"id": "O03", "input": "2026년 8월 7일 납기로 동해부품에서 USB-C 허브 H7을 32개, 개당 41500원에 받기로 했습니다.", "expected": {"id": "O03", "vendor": "동해부품", "item": "USB-C 허브 H7", "quantity": 32, "unit_price": 41500, "due_date": "2026-08-07"}},
+        {"id": "O04", "input": "업체=미래패키지, 품목=택배박스 4호, 수량=300, 단가=780원, 납기=2026-08-10.", "expected": {"id": "O04", "vendor": "미래패키지", "item": "택배박스 4호", "quantity": 300, "unit_price": 780, "due_date": "2026-08-10"}},
+        {"id": "O05", "input": "청명전자로부터 HDMI 케이블 2m 75개를 개당 6400원에 주문했습니다. 도착 예정일은 2026-08-12입니다.", "expected": {"id": "O05", "vendor": "청명전자", "item": "HDMI 케이블 2m", "quantity": 75, "unit_price": 6400, "due_date": "2026-08-12"}},
+        {"id": "O06", "input": "발주처 산들문구: 유성매직 검정 144개, 단가 920원, 납품일 2026.08.14.", "expected": {"id": "O06", "vendor": "산들문구", "item": "유성매직 검정", "quantity": 144, "unit_price": 920, "due_date": "2026-08-14"}},
+        {"id": "O07", "input": "다온테크에 노트북 거치대 L3 수량 28개를 발주합니다(단가 27,500원, 납기 2026-08-17).", "expected": {"id": "O07", "vendor": "다온테크", "item": "노트북 거치대 L3", "quantity": 28, "unit_price": 27500, "due_date": "2026-08-17"}},
+        {"id": "O08", "input": "2026-08-19까지 가람소재가 알루미늄 판재 A2 60장을 장당 12800원에 납품합니다.", "expected": {"id": "O08", "vendor": "가람소재", "item": "알루미늄 판재 A2", "quantity": 60, "unit_price": 12800, "due_date": "2026-08-19"}},
+        {"id": "O09", "input": "푸른오피스, 라벨지 L100, 210팩, 팩당 3,400원, 납품 기한 2026년 8월 21일.", "expected": {"id": "O09", "vendor": "푸른오피스", "item": "라벨지 L100", "quantity": 210, "unit_price": 3400, "due_date": "2026-08-21"}},
+        {"id": "O10", "input": "정다운식품에 드립백 커피 D10을 80세트 주문했고 세트당 11,900원입니다. 납기는 2026-08-24입니다.", "expected": {"id": "O10", "vendor": "정다운식품", "item": "드립백 커피 D10", "quantity": 80, "unit_price": 11900, "due_date": "2026-08-24"}},
+        {"id": "O11", "input": "납기 2026/08/26, 거래처 세움산업, 품목 안전장갑 G5, 500켤레, 단가 1350원.", "expected": {"id": "O11", "vendor": "세움산업", "item": "안전장갑 G5", "quantity": 500, "unit_price": 1350, "due_date": "2026-08-26"}},
+        {"id": "O12", "input": "별빛조명에서 LED 전구 12W를 개당 4,250원으로 96개 구매하며 2026년 8월 28일까지 요청합니다.", "expected": {"id": "O12", "vendor": "별빛조명", "item": "LED 전구 12W", "quantity": 96, "unit_price": 4250, "due_date": "2026-08-28"}},
+        {"id": "O13", "input": "업체 온누리인쇄, 명함 무광 200매 세트 35개, 세트 단가 8800원, 납기일 2026-08-31.", "expected": {"id": "O13", "vendor": "온누리인쇄", "item": "명함 무광 200매", "quantity": 35, "unit_price": 8800, "due_date": "2026-08-31"}},
+        {"id": "O14", "input": "해솔가구 발주 건입니다. 품목은 이동식 서랍 M2, 수량 18개, 개당 73,000원, 납품은 2026-09-02입니다.", "expected": {"id": "O14", "vendor": "해솔가구", "item": "이동식 서랍 M2", "quantity": 18, "unit_price": 73000, "due_date": "2026-09-02"}},
+        {"id": "O15", "input": "2026.09.04 납품 조건으로 은하케이블의 랜선 CAT6 5m를 110개(단가 5200원) 주문합니다.", "expected": {"id": "O15", "vendor": "은하케이블", "item": "랜선 CAT6 5m", "quantity": 110, "unit_price": 5200, "due_date": "2026-09-04"}},
+        {"id": "O16", "input": "초록생활 / 종이컵 13온스 / 2400개 / 개당 92원 / 납기 2026-09-07.", "expected": {"id": "O16", "vendor": "초록생활", "item": "종이컵 13온스", "quantity": 2400, "unit_price": 92, "due_date": "2026-09-07"}},
+        {"id": "O17", "input": "바른포장에 에어캡 50cm 제품을 65롤 발주합니다. 롤당 14900원이며 2026년 9월 9일 납품입니다.", "expected": {"id": "O17", "vendor": "바른포장", "item": "에어캡 50cm", "quantity": 65, "unit_price": 14900, "due_date": "2026-09-09"}},
+        {"id": "O18", "input": "거래처: 이음네트웍스. PoE 스위치 P8 14대, 대당 129000원. 요청 납기: 2026-09-11.", "expected": {"id": "O18", "vendor": "이음네트웍스", "item": "PoE 스위치 P8", "quantity": 14, "unit_price": 129000, "due_date": "2026-09-11"}},
+        {"id": "O19", "input": "한결청소에서 극세사 걸레 M 360장을 장당 610원에 공급하고 납품일은 2026/09/14입니다.", "expected": {"id": "O19", "vendor": "한결청소", "item": "극세사 걸레 M", "quantity": 360, "unit_price": 610, "due_date": "2026-09-14"}},
+        {"id": "O20", "input": "아람보안에 카드키 K2를 150개 주문합니다 — 단가 3800원, 납기 2026년 9월 16일.", "expected": {"id": "O20", "vendor": "아람보안", "item": "카드키 K2", "quantity": 150, "unit_price": 3800, "due_date": "2026-09-16"}}
+      ]
+    },
+    "FMT-03": {
+      "name": "상품 속성 정규화",
+      "fields": ["id", "product", "color", "size", "material", "in_stock"],
+      "cases": [
+        {"id": "P01", "input": "코튼 파우치 C1, 색상 베이지, 크기 20x15cm, 면 소재, 현재 재고 있음.", "expected": {"id": "P01", "product": "코튼 파우치 C1", "color": "베이지", "size": "20x15cm", "material": "면", "in_stock": "Y"}},
+        {"id": "P02", "input": "메탈 펜꽂이 M2(검정), 8x8x10cm, 스틸 재질이며 품절 상태입니다.", "expected": {"id": "P02", "product": "메탈 펜꽂이 M2", "color": "검정", "size": "8x8x10cm", "material": "스틸", "in_stock": "N"}},
+        {"id": "P03", "input": "상품명 우드 트레이 W3 / 내추럴 / 30x20cm / 원목 / 재고 가능.", "expected": {"id": "P03", "product": "우드 트레이 W3", "color": "내추럴", "size": "30x20cm", "material": "원목", "in_stock": "Y"}},
+        {"id": "P04", "input": "회색 펠트 노트북 슬리브 F4는 15인치 규격이고 펠트 소재이며 현재 품절입니다.", "expected": {"id": "P04", "product": "펠트 노트북 슬리브 F4", "color": "회색", "size": "15인치", "material": "펠트", "in_stock": "N"}},
+        {"id": "P05", "input": "세라믹 머그 S5, 흰색, 350ml, 도자기, 주문 가능.", "expected": {"id": "P05", "product": "세라믹 머그 S5", "color": "흰색", "size": "350ml", "material": "도자기", "in_stock": "Y"}},
+        {"id": "P06", "input": "린넨 쿠션 커버 L6 — 올리브색 — 45x45cm — 린넨 — 재고 없음.", "expected": {"id": "P06", "product": "린넨 쿠션 커버 L6", "color": "올리브", "size": "45x45cm", "material": "린넨", "in_stock": "N"}},
+        {"id": "P07", "input": "투명 아크릴 안내판 A7의 규격은 A4이고 재질은 아크릴입니다. 재고 있습니다.", "expected": {"id": "P07", "product": "아크릴 안내판 A7", "color": "투명", "size": "A4", "material": "아크릴", "in_stock": "Y"}},
+        {"id": "P08", "input": "가죽 카드지갑 G8, 브라운 색상, 10x7cm, 소가죽 제품, 일시 품절.", "expected": {"id": "P08", "product": "가죽 카드지갑 G8", "color": "브라운", "size": "10x7cm", "material": "소가죽", "in_stock": "N"}},
+        {"id": "P09", "input": "실리콘 케이블 홀더 S9: 파랑, 6x2cm, 실리콘, 즉시 출고 가능.", "expected": {"id": "P09", "product": "실리콘 케이블 홀더 S9", "color": "파랑", "size": "6x2cm", "material": "실리콘", "in_stock": "Y"}},
+        {"id": "P10", "input": "대나무 칫솔 B10은 민트색, 길이 18cm, 대나무 소재이며 재고가 소진됐습니다.", "expected": {"id": "P10", "product": "대나무 칫솔 B10", "color": "민트", "size": "18cm", "material": "대나무", "in_stock": "N"}},
+        {"id": "P11", "input": "스테인리스 보틀 T11(은색·500ml), 스테인리스 재질, 재고 보유.", "expected": {"id": "P11", "product": "스테인리스 보틀 T11", "color": "은색", "size": "500ml", "material": "스테인리스", "in_stock": "Y"}},
+        {"id": "P12", "input": "네이비색 폴리에스터 백팩 P12, 28L 규격. 현재 품절 상품입니다.", "expected": {"id": "P12", "product": "폴리에스터 백팩 P12", "color": "네이비", "size": "28L", "material": "폴리에스터", "in_stock": "N"}},
+        {"id": "P13", "input": "제품 K13 키보드 매트, 색은 차콜, 크기는 80x30cm, 고무 소재, 구매 가능.", "expected": {"id": "P13", "product": "키보드 매트 K13", "color": "차콜", "size": "80x30cm", "material": "고무", "in_stock": "Y"}},
+        {"id": "P14", "input": "유리 화병 V14 / 초록 / 높이 25cm / 유리 / 품절.", "expected": {"id": "P14", "product": "유리 화병 V14", "color": "초록", "size": "높이 25cm", "material": "유리", "in_stock": "N"}},
+        {"id": "P15", "input": "알루미늄 노트북 스탠드 N15는 실버, 26x22cm, 알루미늄 제품이며 재고가 있습니다.", "expected": {"id": "P15", "product": "알루미늄 노트북 스탠드 N15", "color": "실버", "size": "26x22cm", "material": "알루미늄", "in_stock": "Y"}},
+        {"id": "P16", "input": "종이 파일 홀더 H16(노랑), A4 크기, 크라프트지 소재, 현재 재고 없음.", "expected": {"id": "P16", "product": "종이 파일 홀더 H16", "color": "노랑", "size": "A4", "material": "크라프트지", "in_stock": "N"}},
+        {"id": "P17", "input": "블루 컬러의 캔버스 토트백 C17, 38x35cm, 캔버스 원단, 주문 가능합니다.", "expected": {"id": "P17", "product": "캔버스 토트백 C17", "color": "블루", "size": "38x35cm", "material": "캔버스", "in_stock": "Y"}},
+        {"id": "P18", "input": "라탄 수납바구니 R18은 내추럴색 32x24x18cm 규격의 라탄 제품이며 품절됐습니다.", "expected": {"id": "P18", "product": "라탄 수납바구니 R18", "color": "내추럴", "size": "32x24x18cm", "material": "라탄", "in_stock": "N"}},
+        {"id": "P19", "input": "화이트 멜라민 접시 M19, 지름 22cm, 멜라민 소재, 재고 있음.", "expected": {"id": "P19", "product": "멜라민 접시 M19", "color": "화이트", "size": "지름 22cm", "material": "멜라민", "in_stock": "Y"}},
+        {"id": "P20", "input": "울 데스크 매트 W20: 버건디, 60x30cm, 울 혼방, 판매 완료로 재고 없음.", "expected": {"id": "P20", "product": "울 데스크 매트 W20", "color": "버건디", "size": "60x30cm", "material": "울 혼방", "in_stock": "N"}}
+      ]
+    }
+  }
+}

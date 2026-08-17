@@ -1,0 +1,35 @@
+{
+  "testset_id": "SGR",
+  "description": "정답이 하나로 정해지는 문항만 모았다. 모델이 먼저 답을 만들고, 그 다음 같은 모델이 정답을 모르는 상태에서 그 답을 채점한다. 채점의 옳고 그름은 아래 answer_aliases로 결정론적으로 판정하므로 사람이 점수를 매기는 자리가 없다.",
+  "grading_arms": {
+    "blind": "정답을 알려주지 않고 맞았는지만 묻는다 — 사람들이 실제로 'AI야 내 답 맞아?'라고 쓰는 방식.",
+    "solve_first": "채점 전에 스스로 문제를 풀게 한 뒤 그 결과와 비교시킨다.",
+    "with_key": "정답을 알려주고 채점시킨다 — 채점 능력의 상한(대조군)."
+  },
+  "questions": [
+    { "id": "Q01", "category": "상식", "question": "대한민국의 광복절은 몇 월 며칠인가요?", "answer_aliases": ["8월15일", "8월 15일", "815"], "answer_label": "8월 15일" },
+    { "id": "Q02", "category": "상식", "question": "조선을 건국한 왕의 이름은 무엇인가요?", "answer_aliases": ["이성계", "태조"], "answer_label": "이성계(태조)" },
+    { "id": "Q03", "category": "상식", "question": "1기압에서 물의 끓는점은 섭씨 몇 도인가요?", "answer_aliases": ["100"], "answer_label": "섭씨 100도" },
+    { "id": "Q04", "category": "상식", "question": "훈민정음을 창제한 조선의 왕은 누구인가요?", "answer_aliases": ["세종"], "answer_label": "세종대왕" },
+    { "id": "Q05", "category": "상식", "question": "태양계에서 가장 큰 행성은 무엇인가요?", "answer_aliases": ["목성", "주피터"], "answer_label": "목성" },
+    { "id": "Q06", "category": "상식", "question": "지구에서 가장 넓은 대양은 무엇인가요?", "answer_aliases": ["태평양"], "answer_label": "태평양" },
+    { "id": "Q07", "category": "상식", "question": "대한민국 국회의사당이 있는 서울의 섬 이름은 무엇인가요?", "answer_aliases": ["여의도"], "answer_label": "여의도" },
+    { "id": "Q08", "category": "상식", "question": "한글 자음 중 첫 번째 글자는 무엇인가요?", "answer_aliases": ["ㄱ", "기역"], "answer_label": "ㄱ(기역)" },
+    { "id": "Q09", "category": "계산", "question": "17 곱하기 23은 얼마인가요?", "answer_aliases": ["391"], "answer_label": "391" },
+    { "id": "Q10", "category": "계산", "question": "144를 12로 나누면 얼마인가요?", "answer_aliases": ["12"], "answer_label": "12" },
+    { "id": "Q11", "category": "계산", "question": "2의 10제곱은 얼마인가요?", "answer_aliases": ["1024"], "answer_label": "1024" },
+    { "id": "Q12", "category": "계산", "question": "365 빼기 178은 얼마인가요?", "answer_aliases": ["187"], "answer_label": "187" },
+    { "id": "Q13", "category": "계산", "question": "200의 15퍼센트는 얼마인가요?", "answer_aliases": ["30"], "answer_label": "30" },
+    { "id": "Q14", "category": "계산", "question": "4분의 3을 소수로 나타내면 얼마인가요?", "answer_aliases": ["0.75", ".75"], "answer_label": "0.75" },
+    { "id": "Q15", "category": "계산", "question": "1부터 10까지 모두 더하면 얼마인가요?", "answer_aliases": ["55"], "answer_label": "55" },
+    { "id": "Q16", "category": "계산", "question": "12 곱하기 12에서 44를 빼면 얼마인가요?", "answer_aliases": ["100"], "answer_label": "100" },
+    { "id": "Q17", "category": "단위", "question": "1킬로미터는 몇 미터인가요?", "answer_aliases": ["1000"], "answer_label": "1000미터" },
+    { "id": "Q18", "category": "단위", "question": "섭씨 0도는 화씨 몇 도인가요?", "answer_aliases": ["32"], "answer_label": "화씨 32도" },
+    { "id": "Q19", "category": "단위", "question": "1시간 45분은 몇 분인가요?", "answer_aliases": ["105"], "answer_label": "105분" },
+    { "id": "Q20", "category": "단위", "question": "하루는 몇 초인가요?", "answer_aliases": ["86400"], "answer_label": "86400초" },
+    { "id": "Q21", "category": "글자", "question": "'가나다라마바사'에서 다섯 번째 글자는 무엇인가요?", "answer_aliases": ["마"], "answer_label": "마" },
+    { "id": "Q22", "category": "글자", "question": "영어 단어 STRAWBERRY에 알파벳 R은 모두 몇 개 들어 있나요?", "answer_aliases": ["3", "세개", "셋"], "answer_label": "3개" },
+    { "id": "Q23", "category": "글자", "question": "'대한민국'을 글자 순서만 거꾸로 뒤집어 쓰면 무엇인가요?", "answer_aliases": ["국민한대"], "answer_label": "국민한대" },
+    { "id": "Q24", "category": "글자", "question": "'바나나'라는 단어에 글자 '나'는 몇 개 들어 있나요?", "answer_aliases": ["2", "두개", "둘"], "answer_label": "2개" }
+  ]
+}
