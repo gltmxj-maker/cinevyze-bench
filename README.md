@@ -28,15 +28,19 @@ python3 <name>_score.py --help
 | `lang` | `lang_score.py` · `run_lang_bench.py` | [해당 글](https://www.cinevyze.com/2026/07/ai-prompt-korean-vs-english-instruction-language-tested-2026.html) |
 | `length` | `length_bench_cases.json` · `length_score.py` · `run_length_bench.py` | [해당 글](https://www.cinevyze.com/2026/08/ai-length-instruction-compliance-tested-2026.html) |
 | `linkcite` | `linkcite_bench_cases.json` · `linkcite_score.py` · `run_linkcite_bench.py` | [해당 글](https://www.cinevyze.com/2026/08/ai-citation-link-survival-tested-2026.html) |
+| `localcloud` | `agy_adapter.py` · `localcloud_bench_cases.json` · `localcloud_score.py` · `run_localcloud_bench.py` | [해당 글](https://www.cinevyze.com/2026/06/local-ai-gemma3-vs-cloud-test-2026.html) |
 | `multiturn` | `multiturn_bench_cases.json` · `multiturn_bench_cases_control.json` · `multiturn_score.py` · `run_multiturn_bench.py` | [해당 글](https://www.cinevyze.com/2026/08/ai-multi-turn-instruction-persistence-tested-2026.html) |
 | `needle` | `needle_bench_cases.json` · `needle_score.py` · `run_needle_bench.py` | [해당 글](https://www.cinevyze.com/2026/08/ai-long-document-recall-position-tested-2026.html) |
 | `numunit` | `numunit_bench_cases.json` · `numunit_score.py` · `run_numunit_bench.py` | *(미발행 또는 미매칭)* |
 | `orderbias` | `orderbias_bench_cases.json` · `orderbias_score.py` · `run_orderbias_bench.py` | *(미발행 또는 미매칭)* |
+| `offline-translate` | `corpus/translate/` · `offline_translate_score.py` · `run_offline_translate_bench.py` | [해당 글](https://www.cinevyze.com/2026/06/offline-local-ai-translation-gemma3-2026.html) |
 | `pii` | `pii_bench_cases.json` · `pii_score.py` · `run_pii_bench.py` | [해당 글](https://www.cinevyze.com/2026/08/ai-korean-pii-masking-leak-rate-tested-2026.html) |
+| `prompt4` | `prompt4_bench_cases.json` · `prompt4_score.py` · `run_prompt4_bench.py` | [해당 글](https://www.cinevyze.com/2026/06/how-to-write-ai-prompts-4-part-framework-2026.html) |
 | `quant` | `run_quant.py` | [해당 글](https://www.cinevyze.com/2026/07/local-ai-quantization-q4-vs-q8-korean-tested-2026.html) |
 | `rag` | `rag_bench.py` | [해당 글](https://www.cinevyze.com/2026/07/local-rag-korean-documents-tested-2026.html) |
 | `repro` | `repro_score.py` · `run_repro.py` | [해당 글](https://www.cinevyze.com/2026/07/ai-same-prompt-different-answer-reproducibility-tested-2026.html) |
 | `selfgrade` | `run_selfgrade_bench.py` · `selfgrade_bench_cases.json` · `selfgrade_score.py` | [해당 글](https://www.cinevyze.com/2026/08/ai-self-grading-reliability-tested-2026.html) |
+| `summary` | `corpus/summary/` · `corpus/txt01-source.txt` · `run_summary_bench.py` · `summary_score.py` | [해당 글](https://www.cinevyze.com/2026/07/ai-summary-local-gemma3-vs-gemini-accuracy-tested-2026.html) |
 | `translate` | `translate_bench.py` | [해당 글](https://www.cinevyze.com/2026/06/offline-local-ai-translation-gemma3-2026.html) |
 | `upscale` | `upscale_bench.py` | [해당 글](https://www.cinevyze.com/2026/06/ai-image-upscaler-tested-2026.html) |
 

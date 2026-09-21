@@ -1,0 +1,12 @@
+{
+  "inputs": {
+    "T": "Running a large language model in production is largely a balancing act between latency and throughput. Latency is the time a single user waits for a response, while throughput measures how many requests the system handles per second. To serve more users on the same GPU, engineers often batch several requests together, but aggressive batching can increase the latency that any individual user experiences. Quantization lowers the numerical precision of the model's weights to reduce memory usage and speed up inference, usually at a small cost to output quality.",
+    "C": "Honestly, I was ready to return this thing the day it arrived. The setup instructions were a joke, and it took me a solid hour of fiddling before it finally connected. But once it was up and running, it kind of won me over. The battery lasts way longer than I expected, and it's been rock solid for the past two weeks. Would I recommend it? Yeah, if you can get past the painful first day, it's a keeper.",
+    "E": "Dear valued customer, thank you for reaching out regarding the delayed shipment of your order. After reviewing your case, we found that the package was held at a regional facility due to an address discrepancy. We have corrected the issue and your order is now scheduled to arrive within three business days. As a token of our apology, we have applied a 10 percent credit to your account. Please do not hesitate to contact us if you have any further questions."
+  },
+  "sha256": {
+    "T": "0adb7f898e6c512f3e097325312d7b45990765609cab5e0ad30f8a8b51323656",
+    "C": "f40b9b9206b65ef84095b183a4d92099e06746e3f24282f95d9a03d374a1bda4",
+    "E": "c3eb23695a8e8afab9a3faea3ae1394af4864263a6e5d5fb014d6e8ebe264f5d"
+  }
+}

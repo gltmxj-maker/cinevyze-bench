@@ -1,0 +1,12 @@
+{
+  "prompts": {
+    "TXT-02": "파이썬으로 주어진 정수 리스트에서 중복을 제거하고 내림차순 정렬하는 함수 dedup_sort(nums)를 작성하고, 예시 입력 [3,1,2,3,1]에 대한 출력도 보여줘.",
+    "TXT-01": "다음 글을 핵심 5문장으로 요약해줘. 원문에 없는 내용은 추가하지 마.\n\n커피는 추출 방식에 따라 같은 원두라도 전혀 다른 맛을 낸다. 대표적인 추출 방식은 크게 드립, 에스프레소, 침지식으로 나눌 수 있다.\n\n드립 방식은 분쇄한 원두 위로 뜨거운 물을 부어 중력으로 통과시키는 방법이다. 핸드드립과 자동 드립머신이 여기에 속하며, 물이 원두를 지나는 동안 향미 성분이 녹아 나온다. 드립 커피는 깔끔하고 산뜻한 맛이 특징이고, 물의 온도는 보통 섭씨 90도에서 96도 사이가 권장된다. 온도가 너무 높으면 쓴맛이, 너무 낮으면 신맛이 강해지는 경향이 있다.\n\n에스프레소는 곱게 간 원두에 9기압 안팎의 압력으로 뜨거운 물을 빠르게 통과시켜 25초에서 30초 사이에 소량을 추출하는 방식이다. 짧은 시간에 고압으로 뽑기 때문에 농도가 진하고, 표면에는 크레마라고 불리는 황금빛 거품층이 생긴다. 카페라테나 카푸치노 같은 음료는 모두 이 에스프레소를 기본으로 만든다.\n\n침지식은 물에 원두 가루를 일정 시간 담가 두었다가 걸러 내는 방식이다. 프렌치프레스가 대표적인데, 굵게 간 원두를 뜨거운 물에 약 4분간 담갔다가 금속 필터로 눌러 분리한다. 종이 필터를 쓰지 않기 때문에 원두의 오일 성분이 그대로 남아 묵직한 바디감을 준다.\n\n콜드브루는 찬물이나 상온의 물로 8시간에서 12시간에 걸쳐 천천히 추출하는 방식이다. 낮은 온도에서 오래 우리기 때문에 쓴맛과 신맛이 비교적 적고 부드러우며, 한 번 만들어 냉장 보관하면 며칠간 나누어 마실 수 있다.\n\n추출 결과를 좌우하는 핵심 변수는 분쇄도, 물의 온도, 그리고 물과 원두가 닿는 시간이다. 일반적으로 추출 시간이 길수록 원두는 굵게 갈고, 짧을수록 곱게 간다. 에스프레소처럼 빠르게 뽑는 방식은 곱게, 콜드브루처럼 오래 우리는 방식은 굵게 가는 것이 기본 원칙이다. 결국 좋은 커피란 정해진 한 가지 정답이 아니라, 마시는 사람이 원하는 맛에 맞춰 이 변수들을 조절한 결과라고 할 수 있다.",
+    "TXT-05": "자연스러운 한국어로 번역해줘. 전문 용어는 통용 표기를 따라.\n\nRunning a large language model in production is largely a balancing act between latency and throughput. Latency is the time a single user waits for a response, while throughput measures how many requests the system handles per second. To serve more users on the same GPU, engineers often batch several requests together, but aggressive batching can increase the latency that any individual user experiences. Another common technique is quantization, which lowers the numerical precision of the model's weights to reduce memory usage and speed up inference, usually at a small cost to output quality. The size of the context window also matters: longer prompts consume more GPU memory and slow down generation, because every additional token must be processed before the first word of the answer is produced."
+  },
+  "sha256": {
+    "TXT-02": "9ab06f0eea6de0bd0ae7eb9647861441a37d1f199705ce268d2446e6cb9e3716",
+    "TXT-01": "66e8896346ba0547b942c6db4e57ca51e90ca24b2317cdf40d46a52d2648222e",
+    "TXT-05": "91bfe67c8c9a14e791b8c8fb3ea549292f340580cc6a59fd23822d4b89f2dbbd"
+  }
+}
