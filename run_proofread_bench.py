@@ -131,6 +131,30 @@ def _git_sha() -> str | None:
         return None
 
 
+def _git_dirty() -> bool | None:
+    # HEAD 만 적으면 미커밋 하네스로 돈 런이 「그 SHA 로 재현된다」고 주장하게 된다(2026-09-23 T1 렌즈)
+    try:
+        out = subprocess.check_output(["git", "status", "--porcelain", "--", "run_proofread_bench.py", "proofread_score.py"],
+                                      text=True, stderr=subprocess.DEVNULL, cwd=BASE)
+        return bool(out.strip())
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def _inv_num_ctx(row: dict[str, Any]) -> int | None:
+    return ((row.get("payload") or {}).get("options") or {}).get("num_ctx")
+
+
+def _num_ctx_summary(values: list[int | None], fallback: int | None) -> Any:
+    # 요약은 실제로 보낸 요청(invocation)에서 캔다 — 이번 호출 인자로 적으면 섞인 조건이 사라진다(T1 렌즈)
+    uniq = sorted({v for v in values}, key=lambda v: (v is None, v or 0))
+    if not values:
+        uniq = [fallback]
+    if len(uniq) > 1:
+        return "혼합: " + ", ".join("서버 기본값" if v is None else str(v) for v in uniq)
+    return uniq[0] or "미지정(서버 기본값)"
+
+
 def _gpu_name() -> str | None:
     try:
         return subprocess.check_output(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
@@ -146,7 +170,7 @@ def write_run_yaml(run_dir: Path, model: str, meta: dict[str, Any], date: str | 
         entries.append({"key": row["key"], "did": row["did"], "arm": row["arm"], "rep": row["rep"], "mode": row["mode"],
                         "output_file": row["transcript_file"], "response_file": row["response_file"],
                         "log_file": str(p.relative_to(run_dir)), "gen_s": row.get("gen_s"),
-                        "infra_error": row.get("infra_error")})
+                        "infra_error": row.get("infra_error"), "num_ctx": _inv_num_ctx(row)})
     compare = []
     if (run_dir / "aggregate.json").exists():
         agg = json.loads((run_dir / "aggregate.json").read_text(encoding="utf-8"))
@@ -165,11 +189,12 @@ def write_run_yaml(run_dir: Path, model: str, meta: dict[str, Any], date: str | 
         "tos_source_url": "로컬 오픈웨이트 모델(자체 구동·구독/계정 무관) · 초안=자작(D01 은 첫 런 지문)",
         "arms": {k: ARM_KO[k] for k in ARMS}, "reps": REPS,
         "options": {"temperature": "미지정(모델 기본값)", "seed": "미지정", "think": "미지정(모델 기본값)",
-                    "num_ctx": meta.get("num_ctx") or "미지정(서버 기본값)", "num_predict": "미지정(서버 기본값)"},
+                    "num_ctx": _num_ctx_summary([e["num_ctx"] for e in entries], meta.get("num_ctx")),
+                    "num_predict": "미지정(서버 기본값)"},
         "request_parallelism": 1,
         "compare": compare,
         "environment": {"python": platform.python_version(), "platform": platform.platform(),
-                        "git_sha_at_run": _git_sha(), "ollama_version": meta.get("ollama_version"),
+                        "git_sha_at_run": _git_sha(), "git_dirty_at_run": _git_dirty(), "ollama_version": meta.get("ollama_version"),
                         "hardware": meta.get("hardware")},
         "model_metadata": meta.get("model_metadata"),
         "runs": entries,
@@ -213,6 +238,10 @@ def run(args: argparse.Namespace) -> int:
         dp = run_dir / "pilot_decision.json"
         if not dp.exists() or not json.loads(dp.read_text(encoding="utf-8")).get("proceed"):
             print("파일럿 판정 없음/중단 — 같은 --run-dir 에서 --mode pilot 을 먼저 통과하세요.")
+            return 3
+        seen = {_inv_num_ctx(json.loads(f.read_text(encoding="utf-8"))) for f in (run_dir / "raw").glob("*-invocation.json")}
+        if seen and seen != {args.num_ctx or None}:
+            print(f"--num-ctx 가 이 실행 폴더의 기존 요청({sorted(seen, key=str)})과 다릅니다 — 조건이 섞입니다. 같은 값으로 돌리거나 새 --run-dir 을 쓰세요.")
             return 3
     (run_dir / "raw").mkdir(parents=True, exist_ok=True)
     base = args.base_url.rstrip("/")
