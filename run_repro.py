@@ -43,6 +43,8 @@ import tool_adapters                            # noqa: E402
 import tool_test_harness as harness             # noqa: E402
 import testset                                  # noqa: E402
 import bench_config as cfg                    # noqa: E402
+from live_mark import mark                       # noqa: E402
+from repro_score import REP02_TRUTH, normalize, rep02_records  # noqa: E402
 
 OLLAMA_BIN = os.path.expanduser("~/.local/ollama/bin/ollama")
 
@@ -84,6 +86,49 @@ def unload(model):
     return (model not in ps), ps
 
 
+def _read_output(run_dir, name):
+    """출력 파일을 run_dir 안에서만 읽는다(절대경로·상위탈출 거부 — 채점기와 같은 계약)."""
+    if not name or os.path.isabs(name) or os.path.dirname(name):
+        return None
+    try:
+        with open(os.path.join(run_dir, name), encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def detect_breaks(state, tool_spec, tid, cond_key, rep, out_text):
+    """실행 중 break 판정(집필 좌석 설계 2026-09-21 반영). 반환 = [(종류, 문구), ...].
+
+    - 출력 재현성: 같은 셀(모델·태스크·조건)의 첫 성공 출력과 채점기 normalize() 규칙으로
+      비교해 최초 파손 1회만 발사. 대소문자·문장부호·들여쓰기는 보존(채점기 계약과 동일).
+    - REP-02 총금액: 채점기와 같은 방식(품목 코드 짝짓기·수량×단가 검산)으로 최초 실패 1회만.
+    - 파싱 실패·행 수 불일치·짝짓기 불가는 break가 아니라 채점 분모의 문제다 — 여기선 안 건드린다.
+    - 문구에는 콜론을 넣지 않는다(게시 파일명 규칙과 같은 이유 — 마커 문구가 캡처 설명에 흘러든다).
+    """
+    fires = []
+    if out_text is None:
+        return fires
+    cell = (tool_spec, tid, cond_key)
+    norm = normalize(out_text)
+    if cell not in state["first_output"]:
+        state["first_output"][cell] = norm
+    elif norm != state["first_output"][cell] and not state["output_break"]:
+        state["output_break"] = True
+        fires.append(("break", f"첫 출력 변화 — {tid} {cond_key} · {rep}회차가 1회차와 다름"))
+    if tid == "REP-02" and not state["amount_break"]:
+        recs = rep02_records(out_text)
+        if recs is not None and len(recs) == len(REP02_TRUTH):
+            rows = [next((x for x in recs if t["품목"] in str(x.get("품목") or "")), None)
+                    for t in REP02_TRUTH]
+            if all(rows) and any(r.get("총금액") != t["총금액"]
+                                 for r, t in zip(rows, REP02_TRUTH)):
+                state["amount_break"] = True
+                fires.append(("break", f"첫 총금액 정답 실패 — {tid} {cond_key} · {rep}회차 · "
+                                       "두 발주 건 검산을 통과하지 못함"))
+    return fires
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--repeats", type=int, default=8, help="조건당 반복 횟수(기본 8)")
@@ -106,6 +151,7 @@ def main():
             print(f"\n───── {tid} ({testset.TASKS[tid]['category']}) · {len(p)}자\n{p}")
         for c in CONDITIONS:
             print(f"\n[조건 {c['key']}] {c['label']} · options={c['options'] or '(미전달)'}")
+        mark("agg", f"재현성 실행 계획 — 호출 {total_planned}회 · 조건 {len(CONDITIONS)}종 · GPU 호출 0회")
         return 0
 
     out = os.path.join("test_runs", f"repro-index-{date_str.replace('-', '')}.json")
@@ -113,6 +159,8 @@ def main():
     index = {"date": date_str, "repeats": a.repeats,
              "conditions": CONDITIONS, "runs_dirs": [], "gpu_baseline_mib": gpu_used_mib()}
     unload_failed = False
+    # break 판정 상태(집필 좌석 설계 2026-09-21) — 성질별 최초 1회만 촬영한다.
+    bstate = {"first_output": {}, "output_break": False, "amount_break": False}
     if os.path.exists(out):
         try:
             with open(out, encoding="utf-8") as f:
@@ -153,6 +201,8 @@ def main():
             for tid in task_ids:
                 prompt = testset.build_prompt(tid)
                 for cond in CONDITIONS:
+                    mark("turn", f"재현성 조건 전환 — {tid} {cond['key']} · {cond['label']} · "
+                                 f"모델 {model.replace(':', '-')}")
                     for rep in range(1, a.repeats + 1):
                         # ★어댑터는 프로세스 전역 공유 인스턴스다 — 조건은 '호출 직전마다' 명시한다.
                         #   조건 루프 밖에서 한 번만 세팅하면 중간에 누가 건드렸을 때 조용히 섞인다.
@@ -169,6 +219,7 @@ def main():
                             idx -= 1
                             failures.append({"task": f"{tid}/{cond['key']}", "repeat": rep,
                                              "error": str(e)})
+                            mark("infra", f"생성 실패 — {tid} {cond['key']} · {rep}회차 · 어댑터 오류")
                             print(f"  [!!] {tid}/{cond['key']} #{rep} 실패 — {e}")
                             continue
                         # 조건·회차를 run 레코드에 박는다(채점기가 이걸로 셀을 묶는다)
@@ -179,6 +230,11 @@ def main():
                         r["eval_count"] = (adapter.last_meta or {}).get("eval_count")
                         r["eval_duration_ns"] = (adapter.last_meta or {}).get("eval_duration_ns")
                         r["load_duration_ns"] = (adapter.last_meta or {}).get("load_duration_ns")
+                        # break 판정 — 촬영기가 이 순간의 터미널 화면을 남긴다(§4 [B] 게재 축).
+                        out_text = _read_output(run_dir, r.get("output_file"))
+                        for bkind, bphrase in detect_breaks(bstate, tool_spec, tid,
+                                                            cond["key"], rep, out_text):
+                            mark(bkind, bphrase)
                         runs.append(r)
                         g = gpu_used_mib()
                         if g is not None and (peak is None or g > peak):
@@ -196,7 +252,11 @@ def main():
                 path = harness.record_run_yaml(adapter, model, runs, run_dir,
                                                date_str=date_str, method=",".join(task_ids))
                 print(f"  run.yaml → {path} ({len(runs)} runs)")
+                mark("agg", f"재현성 측정 집계 — 모델 {model.replace(':', '-')} · "
+                            f"성공 {len(runs)}회 · 생성 실패 {len(failures)}회")
             ok, ps = unload(model)
+            if not ok:
+                mark("infra", f"모델 언로드 실패 — 모델 {model.replace(':', '-')} · 수동 확인 필요")
             unload_failed = unload_failed or not ok
             print(f"  [unload] {model} → {'OK' if ok else '⚠ 잔존'} · "
                   f"VRAM peak={peak if peak is not None else '측정 실패'} MiB")

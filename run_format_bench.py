@@ -19,7 +19,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from format_score import score_run_dir
+from format_score import score_response, score_run_dir
+from live_mark import mark as live_mark
 
 HARNESS_VERSION = "1.0"
 DEFAULT_CASES = Path(__file__).with_name("format_bench_cases.json")
@@ -208,6 +209,60 @@ def _git_sha() -> str | None:
         return None
 
 
+def _clip(text: str, limit: int = 185) -> str:
+    """마커 문구를 한 줄로 만들어 촬영기 기록 한도(200자) 안에 가둔다."""
+    flat = " ".join(str(text).split())
+    return flat if len(flat) <= limit else flat[: limit - 1] + "…"
+
+
+def _axis_of(scored: dict[str, Any]) -> str | None:
+    if not (scored.get("parse") and scored.get("schema")):
+        return "structure"
+    if not scored.get("semantic"):
+        return "value"
+    return None
+
+
+def _first_wrong_field(fields: list[str], parsed: dict[str, Any] | None, expected: dict[str, Any]) -> str | None:
+    for field in fields:
+        if (parsed or {}).get(field) != expected.get(field):
+            return field
+    return None
+
+
+def _scan_existing(run_dir: Path) -> tuple[set[str], int]:
+    """재개 시 run_dir 전체에서 축별 첫 실패 기억과 빈 응답 수를 복원한다(과거 마커 재발화 없음)."""
+    seen: set[str] = set()
+    empty_no_infra = 0
+    for path in sorted((run_dir / "raw").glob("*-invocation.json")):
+        row = json.loads(path.read_text(encoding="utf-8"))
+        response_path = run_dir / row["response_file"]
+        response_text = response_path.read_text(encoding="utf-8") if response_path.exists() else ""
+        if row.get("infra_error"):
+            continue
+        if not response_text.strip():
+            empty_no_infra += 1
+            continue
+        axis = _axis_of(score_response(row["format"], response_text, row["fields"], row["expected"]))
+        if axis:
+            seen.add(axis)
+    return seen, empty_no_infra
+
+
+def _compare_rows(run_dir: Path) -> list[dict[str, Any]]:
+    """compare는 코드가 aggregate에서 읽은 수치만 담는다(손 입력 금지)."""
+    rows: list[dict[str, Any]] = []
+    aggregate_path = run_dir / "aggregate.json"
+    if aggregate_path.exists():
+        agg = json.loads(aggregate_path.read_text(encoding="utf-8"))
+        for fmt in ("json", "csv", "markdown"):
+            block = (agg.get("formats") or {}).get(fmt, {}).get("success") or {}
+            if block:
+                rows.append({"metric": "success", "arm": fmt,
+                             "value": block.get("success"), "total": block.get("total")})
+    return rows
+
+
 def write_run_yaml(run_dir: Path, model: str, metadata: dict[str, Any]) -> None:
     entries = []
     for path in sorted((run_dir / "raw").glob("*-invocation.json")):
@@ -235,6 +290,7 @@ def write_run_yaml(run_dir: Path, model: str, metadata: dict[str, Any]) -> None:
         "tos_source_url": "로컬 오픈웨이트 모델(자체 구동·구독/계정 무관)",
         "keep_alive": 0,
         "request_parallelism": 1,
+        "compare": _compare_rows(run_dir),
         "environment": {
             "python": platform.python_version(),
             "platform": platform.platform(),
@@ -297,7 +353,23 @@ def run_benchmark(args: argparse.Namespace) -> int:
     else:
         metadata = {}
 
+    seen_break, empty_no_infra = _scan_existing(args.run_dir)
+    previous_task = None
+    if pending:
+        first = pending[0]
+        if args.mode == "pilot":
+            live_mark("turn", _clip(
+                f"파일럿 시작 — {args.model} · {first['task_name']}({first['task']}) · {pending_total}회 · 사례별 JSON·CSV·마크다운 순환"))
+        else:
+            live_mark("turn", _clip(
+                f"본측정으로 전환 — {args.model} · {first['task_name']}({first['task']}) · 기존 {len(plan) - pending_total}회 포함, {pending_total}회 추가"))
+
     for position, row in enumerate(pending, 1):
+        if previous_task is not None and row["task"] != previous_task:
+            previous_name = data["tasks"][previous_task]["name"]
+            live_mark("turn", _clip(
+                f"작업 전환 — {previous_name}({previous_task}) → {row['task_name']}({row['task']}) · 세 형식 순환은 유지"))
+        previous_task = row["task"]
         next_id += 1
         prompt = build_prompt(row["task"], row["task_name"], row["case"], row["fields"], row["format"])
         response, attempts, infra_error = generate(args.base_url, args.model, prompt, args.timeout)
@@ -305,6 +377,24 @@ def run_benchmark(args: argparse.Namespace) -> int:
         if response is not None and not isinstance(response_value, str):
             infra_error = infra_error or "invalid_api_response: response 필드가 문자열이 아님"
         response_text = response_value if isinstance(response_value, str) else ""
+        error_attempts = sum(1 for item in attempts if item.get("error"))
+        empty_without_infra = response is not None and not response_text.strip() and not infra_error
+        if empty_without_infra:
+            empty_no_infra += 1
+            live_mark("infra", _clip(
+                f"측정 흔들림 — {row['task']}/{row['case']['id']}/{row['format']} · 응답은 도착했지만 빈 텍스트 · 시도 {len(attempts)}/2 · 빈 응답"))
+        elif error_attempts or infra_error:
+            if infra_error and "invalid_api_response" in str(infra_error):
+                outcome = "응답 타입 오류"
+            elif response is None:
+                outcome = "최종 실패"
+            elif not response_text.strip():
+                outcome = "빈 응답"
+            else:
+                outcome = "응답 확보"
+            cause = infra_error or next((item["error"] for item in attempts if item.get("error")), "재시도")
+            live_mark("infra", _clip(
+                f"측정 흔들림 — {row['task']}/{row['case']['id']}/{row['format']} · {cause} · 시도 {len(attempts)}/2 · {outcome}"))
         stem = f"{next_id:03d}"
         response_rel = f"raw/{stem}-response.txt"
         transcript_rel = f"raw/{stem}-output.txt"
@@ -344,8 +434,23 @@ def run_benchmark(args: argparse.Namespace) -> int:
         print(f"[{position}/{len(pending)}] {row['key']} elapsed={invocation['elapsed_s']}s"
               + (f" ERROR={infra_error}" if infra_error else ""), flush=True)
 
-    write_run_yaml(args.run_dir, args.model, metadata)
+        if not infra_error and response_text.strip():
+            scored = score_response(row["format"], response_text, row["fields"], row["case"]["expected"])
+            axis = _axis_of(scored)
+            if axis and axis not in seen_break:
+                seen_break.add(axis)
+                if axis == "structure":
+                    live_mark("break", _clip(
+                        f"구조 계약 첫 실패 — {row['task']}/{row['case']['id']}/{row['format']} · "
+                        f"{scored['failure_reason']}: {scored['failure_detail']}"))
+                else:
+                    field = _first_wrong_field(row["fields"], scored["parsed"], row["case"]["expected"])
+                    live_mark("break", _clip(
+                        f"구조는 통과, 값은 첫 오답 — {row['task']}/{row['case']['id']}/{row['format']} · "
+                        f"{field}: 정답 {row['case']['expected'].get(field)}, 채점값 {(scored['parsed'] or {}).get(field)}"))
+
     results, aggregate = score_run_dir(args.run_dir)
+    write_run_yaml(args.run_dir, args.model, metadata)
     infra_count = sum(bool(row.get("infra_error")) for row in results)
     limit = 0.10 if args.mode == "pilot" else 0.05
     status = {
@@ -358,6 +463,41 @@ def run_benchmark(args: argparse.Namespace) -> int:
         "chunk_limited": chunk_limited,
         "pilot_decision": aggregate.get("pilot_decision"),
     }
+
+    formats_block = aggregate.get("formats", {})
+    label_pairs = (("json", "JSON"), ("csv", "CSV"), ("markdown", "마크다운"))
+
+    def _success_part(fmt: str, label: str) -> str:
+        block = formats_block.get(fmt, {}).get("success", {})
+        return f"{label} {block.get('success', 0)}/{block.get('total', 0)}"
+
+    if args.mode == "pilot":
+        decision_block = status.get("pilot_decision") or {}
+        verdict = "본측정 진행" if decision_block.get("proceed") else (
+            "본측정 중단: " + ", ".join(decision_block.get("reasons") or ["판정 없음"]))
+        live_mark("agg", _clip(
+            f"파일럿 {status['runs']}회 집계 — 완전통과 "
+            + " · ".join(_success_part(fmt, label) for fmt, label in label_pairs)
+            + f" · {verdict}"))
+    elif status["complete"]:
+        def _failure_part(fmt: str) -> str:
+            counts = formats_block.get(fmt, {}).get("failure_counts") or {}
+            return ", ".join(f"{reason} {count}" for reason, count in sorted(counts.items())) or "없음"
+
+        live_mark("agg", _clip(
+            "실패 유형 집계 — JSON " + _failure_part("json")
+            + " · CSV " + _failure_part("csv")
+            + " · 마크다운 " + _failure_part("markdown")))
+        tail = ""
+        if empty_no_infra:
+            tail += f" · 별도 확인 빈 응답 {empty_no_infra}건"
+        if status["infra_rate"] > status["infra_limit"]:
+            tail += " · 측정품질 기준 초과, 비교 보류"
+        live_mark("agg", _clip(
+            f"{status['runs']}회 집계 — 완전통과 "
+            + " · ".join(_success_part(fmt, label) for fmt, label in label_pairs)
+            + f" · 기록상 인프라 {infra_count}건" + tail))
+
     (args.run_dir / "run_status.json").write_text(
         json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8"
     )

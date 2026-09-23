@@ -30,7 +30,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from injection_score import score_run_dir
+from live_mark import mark as live_mark
+from injection_score import classify, score_run_dir
 
 HARNESS_VERSION = "1.0"
 DEFAULT_CASES = Path(__file__).with_name("injection_bench_cases.json")
@@ -370,6 +371,10 @@ def run_benchmark(args: argparse.Namespace) -> int:
     print(f"mode={args.mode} planned={len(plan)} existing={len(plan) - pending_total} "
           f"pending_total={pending_total} running_now={len(pending)}")
 
+    breach_seen = False          # 실촬영 마커용 — 첫 뚫림 1회만 알린다
+    last_task = None             # ★방어 문구는 회차마다 교대로 돌아간다(C01/bare→C01/delimiter→…).
+                                 #   팔을 전환점으로 잡으면 마커가 매 행 터져 화면이 같은 줄로 덮인다
+                                 #   (2026-09-16 실측 · 81행 중 81번). 진짜 구간은 과제다.
     if pending:
         metadata = model_metadata(args.base_url, args.model, args.timeout)
     elif (args.run_dir / "run.yaml").exists():
@@ -428,8 +433,25 @@ def run_benchmark(args: argparse.Namespace) -> int:
         write_run_yaml(args.run_dir, args.model, metadata)
         print(f"[{position}/{len(pending)}] {row['key']} elapsed={invocation['elapsed_s']}s"
               + (f" ERROR={infra_error}" if infra_error else ""), flush=True)
+        if row["task"] != last_task:
+            last_task = row["task"]
+            live_mark("turn", f"과제 {row['task']} 시작 — 같은 입력을 방어 문구 3종으로 각각 받는다")
+        if infra_error:
+            live_mark("infra", f"{row['key']} 회차가 응답을 못 받았다 — {infra_error}")
+        # ★실촬영 마커 — 방어가 뚫린 순간은 분류해야만 안다. 화면에는 `elapsed=…` 만 흐른다.
+        #   classify 는 순수 함수라 값을 바꾸지 않는다(최종 집계는 score_run_dir 이 다시 낸다).
+        elif not breach_seen:
+            try:
+                _cls = classify(invocation, response_text)
+                if _cls["breached"]:
+                    breach_seen = True
+                    live_mark("break", f"첫 뚫림 — {row['key']} · {'·'.join(_cls['breach_kinds'])} · "
+                                       f"{(_cls['breach_detail'] or '')[:90]}")
+            except Exception as _e:                      # noqa: BLE001 - 촬영 보조라 측정을 막지 않는다
+                live_mark("infra", f"즉시분류 건너뜀({type(_e).__name__})")
 
     write_run_yaml(args.run_dir, args.model, metadata)
+    live_mark("agg", f"집계 시작({args.mode}) — 회차 기록을 다시 읽어 최종 분류한다")
     results, aggregate = score_run_dir(args.run_dir)
     # Scoring writes aggregate.json, which is where the compare rows come from — so the
     # manifest is rewritten once more to carry them.
@@ -449,6 +471,10 @@ def run_benchmark(args: argparse.Namespace) -> int:
     (args.run_dir / "run_status.json").write_text(
         json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    live_mark("agg", f"집계 완료({args.mode}) — 방어별 저항률 "
+                     + " · ".join(f"{k} {((v.get('resisted') or {}).get('count'))}/{((v.get('resisted') or {}).get('total'))}"
+                                  for k, v in (aggregate.get("by_arm") or {}).items())
+                     + f" · 뚫린 유형 {dict(aggregate.get('breach_kinds') or {})}")
     print(json.dumps(status, ensure_ascii=False, indent=2))
     if status["infra_rate"] > limit:
         return 4

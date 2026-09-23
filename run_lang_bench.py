@@ -25,6 +25,12 @@ from pathlib import Path
 from typing import Any
 
 from lang_score import score_run_dir
+from format_score import score_response
+try:
+    from live_mark import mark as _live_mark
+except Exception:  # capture observer is optional to the measurement itself
+    def _live_mark(kind: str, text: str) -> None:
+        return None
 
 HARNESS_VERSION = "1.0"
 DEFAULT_CASES = Path(__file__).with_name("format_bench_cases.json")
@@ -33,6 +39,17 @@ OUTPUT_FORMAT = "json"
 # Half the cases run Korean first, half English first: a one-directional order would let
 # model warm-up or drift masquerade as a language effect.
 LANG_ROTATIONS = (("ko", "en"), ("en", "ko"))
+
+
+def live_mark(kind: str, text: str) -> None:
+    """Emit capture metadata without letting the observer alter the benchmark."""
+    try:
+        _live_mark(kind, text.replace("\r", " ").replace("\n", " "))
+    except Exception as exc:  # noqa: BLE001 - capture failure must not truncate measurements
+        try:
+            print(f"[capture-warning] {type(exc).__name__}", flush=True)
+        except Exception:  # noqa: BLE001 - even a closed stdout must not alter the run
+            pass
 
 
 def load_cases(path: Path) -> dict[str, Any]:
@@ -341,7 +358,12 @@ def run_benchmark(args: argparse.Namespace) -> int:
     else:
         metadata = {}
 
+    first_failure_seen = False
+    last_task = None
     for position, row in enumerate(pending, 1):
+        if row["task"] != last_task:
+            last_task = row["task"]
+            live_mark("turn", f"과제 {last_task} — 같은 입력을 한국어·영어 지시문으로 짝비교한다")
         next_id += 1
         prompt = build_prompt(row["task"], row["task_name"], row["case"], row["fields"], row["lang"])
         response, attempts, infra_error = generate(args.base_url, args.model, prompt, args.timeout)
@@ -388,8 +410,21 @@ def run_benchmark(args: argparse.Namespace) -> int:
         write_run_yaml(args.run_dir, args.model, metadata)
         print(f"[{position}/{len(pending)}] {row['key']} elapsed={invocation['elapsed_s']}s"
               + (f" ERROR={infra_error}" if infra_error else ""), flush=True)
+        if infra_error:
+            live_mark("infra", f"{row['key']} 응답 실패 — {infra_error}")
+        elif not first_failure_seen:
+            try:
+                scored = score_response(OUTPUT_FORMAT, response_text, row["fields"], row["case"]["expected"])
+                if not scored["success"]:
+                    first_failure_seen = True
+                    reason = str(scored.get("failure_reason") or "unknown")
+                    detail = str(scored.get("failure_detail") or "")[:90]
+                    live_mark("break", f"첫 실패 — {row['key']} · {reason} · {detail}")
+            except Exception as exc:  # noqa: BLE001 - capture scoring must not alter final scoring
+                live_mark("infra", f"즉시채점 건너뜀({type(exc).__name__})")
 
     write_run_yaml(args.run_dir, args.model, metadata)
+    live_mark("agg", f"집계 시작({args.mode}) — 한국어·영어 짝을 다시 읽어 성공률을 비교한다")
     results, aggregate = score_run_dir(args.run_dir)
     infra_count = sum(bool(row.get("infra_error")) for row in results)
     limit = 0.10 if args.mode == "pilot" else 0.05
@@ -406,6 +441,14 @@ def run_benchmark(args: argparse.Namespace) -> int:
     (args.run_dir / "run_status.json").write_text(
         json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    _langs = aggregate.get("langs") or {}
+    summary_parts = []
+    for lang, value in _langs.items():
+        success = value.get("success") if isinstance(value, dict) else None
+        if isinstance(success, dict):
+            summary_parts.append(f"{lang} {success.get('success')}/{success.get('total')} 성공")
+    live_mark("agg", f"집계 완료({args.mode}) — " + " · ".join(summary_parts)
+                     + f" · infra {infra_count}회")
     print(json.dumps(status, ensure_ascii=False, indent=2))
     if status["infra_rate"] > limit:
         return 4

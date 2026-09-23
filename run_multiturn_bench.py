@@ -25,7 +25,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from multiturn_score import RULES, score_run_dir
+from multiturn_score import RULES, score_run_dir, score_turn
+from live_mark import mark as live_mark
 
 HARNESS_VERSION = "1.0"
 DEFAULT_CASES = Path(__file__).with_name("multiturn_bench_cases.json")
@@ -268,6 +269,7 @@ def run_conversation(args: argparse.Namespace, data: dict[str, Any], arm: str,
     if arm == "system":
         messages.append({"role": "system", "content": data["rules"]["block"]})
     performed = 0
+    broke_seen = False          # 실촬영 마커용 — 이 대화의 첫 이탈 1회만 알린다
     for turn, question in enumerate(conversation["questions"][:max_turns], 1):
         user_content = build_user_message(data, arm, turn, question)
         key = f"{arm}/{args.model}/{conversation['id']}/t{turn:02d}"
@@ -311,7 +313,25 @@ def run_conversation(args: argparse.Namespace, data: dict[str, Any], arm: str,
         if infra_error:
             # 응답이 없는 채로 history를 이어 붙이면 이후 턴 전부가 오염된다 — 이 대화는 여기서 끊는다.
             print(f"  ! {conversation['id']} 중단 — infra 오류", flush=True)
+            live_mark("infra", f"{arm}/{conversation['id']} t{turn:02d} 에서 대화가 끊겼다 — {infra_error}")
             return run_id, performed
+        # ★실촬영 마커 — 규칙이 깨지는 순간은 채점해야만 안다. 화면에는 `ptok=…` 만 흐른다.
+        #   score_turn 은 순수 함수라 값을 바꾸지 않는다(최종 집계는 score_run_dir 이 다시 낸다).
+        if not broke_seen:
+            try:
+                _row = score_turn(record, response_text)
+                if _row["outcome"] == "overflow":
+                    broke_seen = True
+                    live_mark("break", f"잊은 게 아니라 잘렸다 — {arm}/{conversation['id']} t{turn:02d} · "
+                                       f"prompt {_row['prompt_tokens']}tok / num_ctx {_row['num_ctx']}"
+                                       + (" · done_reason=length" if _row["truncated"] else ""))
+                elif _row["scored"] and not _row["all_rules"]:
+                    _lost = [rule for rule in RULES if _row[rule] is False]
+                    broke_seen = True
+                    live_mark("break", f"첫 이탈 — {arm}/{conversation['id']} t{turn:02d} · "
+                                       f"규칙 {'·'.join(_lost)} 이 빠졌다 · 답변 머리 \"{_row['response_head'][:60]}\"")
+            except Exception as _e:                      # noqa: BLE001 - 촬영 보조라 측정을 막지 않는다
+                live_mark("infra", f"즉시채점 건너뜀({type(_e).__name__})")
         messages.append({"role": "assistant", "content": response_text})
     return run_id, performed
 
@@ -367,10 +387,13 @@ def run_benchmark(args: argparse.Namespace) -> int:
     for arm in arms:
         for conversation in conversations:
             print(f"[{arm}] {conversation['id']}", flush=True)
+            live_mark("turn", f"규칙 유지 방식 '{arm}' · 대화 {conversation['id']} 시작 — "
+                              f"{max_turns}턴을 이어 붙이며 매 턴 규칙 3개를 본다")
             run_id, performed = run_conversation(
                 args, data, arm, conversation, existing, run_dir, max_turns, run_id)
             performed_total += performed
 
+    live_mark("agg", f"집계 시작({args.mode}) — 회차 기록을 다시 읽어 최종 채점한다")
     rows, aggregate = score_run_dir(run_dir)
     metadata = {}
     metadata_dir = run_dir / "model_metadata"
@@ -378,6 +401,13 @@ def run_benchmark(args: argparse.Namespace) -> int:
         for path in sorted(metadata_dir.glob("*.json")):
             metadata[path.stem] = json.loads(path.read_text(encoding="utf-8"))
     write_run_yaml(run_dir, metadata, data, args.num_ctx)
+    _ov = (aggregate.get("overall") or {}).get("all_rules") or {}
+    _ctx = aggregate.get("context") or {}
+    live_mark("agg", f"집계 완료({args.mode}) — 세 규칙 동시 유지 "
+                     f"{_ov.get('kept')}/{_ov.get('n')}회 · 팔별 "
+                     + " · ".join(f"{k} {((v.get('all_rules') or {}).get('rate'))}"
+                                  for k, v in (aggregate.get("by_arm") or {}).items())
+                     + f" · 창 넘김 {_ctx.get('overflow_turns')}회 · 잘림 {_ctx.get('truncated_turns')}회")
     print(json.dumps({key: aggregate[key] for key in ("overall", "by_arm", "context", "infra_errors")},
                      ensure_ascii=False, indent=2))
     print(f"performed_this_run={performed_total} rows_total={len(rows)}")

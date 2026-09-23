@@ -24,7 +24,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from banword_score import score_run_dir
+from banword_score import score_one, score_run_dir
+from live_mark import mark as live_mark
 
 HARNESS_VERSION = "1.0"
 DEFAULT_CASES = Path(__file__).with_name("banword_bench_cases.json")
@@ -149,13 +150,18 @@ def generate(base_url: str, model: str, prompt: str, timeout: int, num_ctx: int 
     return None, attempts, attempts[-1]["error"]
 
 
-def planned_runs(data: dict[str, Any], mode: str, control_reps: int = 0) -> list[dict[str, Any]]:
+def planned_runs(data: dict[str, Any], mode: str, control_reps: int = 0,
+                 ban_reps: int = 1) -> list[dict[str, Any]]:
     prompts = data["prompts"]
     counts = data["ban_counts"]
     subset = set(data["position_subset"])
     # A slow model can be given fewer control repeats than the cases file asks for; the arm still
     # has to exist (the base rate is what makes the ban rate readable), only its n shrinks.
     reps = int(control_reps or data["control_reps"])
+    # ★금지어 팔의 반복 축(2026-09-16). 옛 판은 (프롬프트×개수×위치) 조합당 1회뿐이라 팔당 n=11 이었고,
+    #   같은 하네스를 두 번 돌리자 ban3 18.2%→36.4%, ban5 27.3%→18.2% 로 **사다리 순서가 뒤집혔다**.
+    #   n 을 늘리지 않으면 '개수를 늘릴수록 무너진다'를 말할 근거가 없다. 조건은 그대로고 n 만 는다.
+    ban_reps = max(1, int(ban_reps or 1))
     runs: list[dict[str, Any]] = []
 
     def row(prompt: dict[str, Any], arm: str, position: str, shown: list[str], key: str) -> dict[str, Any]:
@@ -175,16 +181,21 @@ def planned_runs(data: dict[str, Any], mode: str, control_reps: int = 0) -> list
             runs.append(row(prompt, "control", "none", [], f"{prompt['id']}/control/{rep}"))
     for prompt in prompts:
         for count in counts:
-            runs.append(row(prompt, f"ban{count}", "front", prompt["banned"][:count],
-                            f"{prompt['id']}/ban{count}/front"))
+            for rep in range(1, ban_reps + 1):
+                # ban_reps==1 이면 옛 키 그대로 — 기존 런 폴더의 이어받기(_existing)가 안 깨진다.
+                suffix = "" if ban_reps == 1 else f"/{rep}"
+                runs.append(row(prompt, f"ban{count}", "front", prompt["banned"][:count],
+                                f"{prompt['id']}/ban{count}/front{suffix}"))
     # The position axis runs on a fixed subset — enough to see whether burying the ban at the end
     # changes anything, without doubling the whole grid.
     for prompt in prompts:
         if prompt["id"] not in subset:
             continue
         for count in counts:
-            runs.append(row(prompt, f"ban{count}", "back", prompt["banned"][:count],
-                            f"{prompt['id']}/ban{count}/back"))
+            for rep in range(1, ban_reps + 1):
+                suffix = "" if ban_reps == 1 else f"/{rep}"
+                runs.append(row(prompt, f"ban{count}", "back", prompt["banned"][:count],
+                                f"{prompt['id']}/ban{count}/back{suffix}"))
     return runs
 
 
@@ -228,7 +239,7 @@ def _compare_rows(run_dir: Path) -> list[dict[str, Any]]:
 
 
 def write_run_yaml(run_dir: Path, model: str, metadata: dict[str, Any], data: dict[str, Any],
-                   num_ctx: int = 0) -> None:
+                   num_ctx: int = 0, ban_reps: int = 1) -> None:
     entries = []
     for path in sorted((run_dir / "raw").glob("*-invocation.json")):
         row = json.loads(path.read_text(encoding="utf-8"))
@@ -263,6 +274,7 @@ def write_run_yaml(run_dir: Path, model: str, metadata: dict[str, Any], data: di
         "axis": "banned_word_instruction",
         "ban_counts": data["ban_counts"],
         "control_reps": data["control_reps"],
+        "ban_reps": int(ban_reps or 1),
         "compare": _compare_rows(run_dir),
         "environment": {
             "python": platform.python_version(),
@@ -285,7 +297,7 @@ def write_run_yaml(run_dir: Path, model: str, metadata: dict[str, Any], data: di
 
 def run_benchmark(args: argparse.Namespace) -> int:
     data = load_cases(args.cases)
-    plan = planned_runs(data, args.mode, args.control_reps)
+    plan = planned_runs(data, args.mode, args.control_reps, args.ban_reps)
     if not plan:
         raise ValueError("실행 계획이 비어 있음")
     if len({row["key"] for row in plan}) != len(plan):
@@ -330,6 +342,7 @@ def run_benchmark(args: argparse.Namespace) -> int:
     else:
         metadata = {}
 
+    first_violation_seen = False          # 실촬영 마커용 — 첫 위반 1회만 알린다
     for index, row in enumerate(pending, 1):
         next_id += 1
         prompt_text = build_prompt(row["prompt"], row["shown"], row["position"], data["ban_sentence"])
@@ -376,15 +389,29 @@ def run_benchmark(args: argparse.Namespace) -> int:
         (args.run_dir / invocation_rel).write_text(
             json.dumps(invocation, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        write_run_yaml(args.run_dir, args.model, metadata, data, args.num_ctx)
+        write_run_yaml(args.run_dir, args.model, metadata, data, args.num_ctx, args.ban_reps)
         print(f"[{index}/{len(pending)}] {row['key']} elapsed={invocation['elapsed_s']}s"
               + (f" ERROR={infra_error}" if infra_error else ""), flush=True)
+        # ★실촬영 마커 — 채점을 그 자리에서 해 「지금이 그 순간」을 한 줄로 알린다.
+        #   촬영기(live_capture_runner --on)가 이 줄을 보고 그 화면을 찍는다. 값은 안 바꾼다
+        #   (score_one 은 순수 함수이고, 최종 집계는 여전히 score_run_dir 이 다시 낸다).
+        if not infra_error and response_rel:
+            try:
+                _resp = (args.run_dir / response_rel).read_text(encoding="utf-8")
+                _scored = score_one(invocation, _resp)
+                if _scored["violated"] and not first_violation_seen:
+                    first_violation_seen = True
+                    live_mark("break", f"첫 위반 — {row['key']} · 금지어 "
+                                       f"{'·'.join(_scored['violated_words'])} 가 그대로 나왔다")
+            except Exception as _e:                      # noqa: BLE001 - 촬영 보조라 측정을 막지 않는다
+                live_mark("infra", f"즉시채점 건너뜀({type(_e).__name__})")
 
-    write_run_yaml(args.run_dir, args.model, metadata, data, args.num_ctx)
+    write_run_yaml(args.run_dir, args.model, metadata, data, args.num_ctx, args.ban_reps)
+    live_mark("agg", f"집계 시작({args.mode}) — 회차 기록을 다시 읽어 최종 채점한다")
     results, aggregate = score_run_dir(args.run_dir)
     # Scoring writes aggregate.json, which is where the compare rows come from — so the
     # manifest is rewritten once more to carry them.
-    write_run_yaml(args.run_dir, args.model, metadata, data, args.num_ctx)
+    write_run_yaml(args.run_dir, args.model, metadata, data, args.num_ctx, args.ban_reps)
     infra_count = sum(bool(row.get("infra_error")) for row in results)
     limit = 0.10 if args.mode == "pilot" else 0.05
     status = {
@@ -393,13 +420,21 @@ def run_benchmark(args: argparse.Namespace) -> int:
         "infra_errors": infra_count,
         "infra_rate": infra_count / len(results) if results else 1.0,
         "infra_limit": limit,
-        "complete": len(results) == len(plan),
+        # ★'계획한 회차가 전부 있는가'로 본다(2026-09-16). 옛 판은 총 개수 비교라, 같은 런 폴더에
+        #   계획 밖 회차가 하나라도 있으면(파일럿의 금지어 회차처럼) 다 돌고도 complete=false 가 됐다.
+        "complete": {row["key"] for row in plan}.issubset(_existing(args.run_dir)[0]),
+        "extra_runs": max(0, len(results) - len(plan)),
         "chunk_limited": chunk_limited,
         "pilot_decision": aggregate.get("pilot_decision"),
     }
     (args.run_dir / "run_status.json").write_text(
         json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    _ov = (aggregate.get("overall") or {})
+    live_mark("agg", f"집계 완료({args.mode}) — 위반 {_ov.get('violated')}건 / 지시회차 "
+                     f"{aggregate.get('ban_runs')}회 · 팔별 "
+                     + " · ".join(f"{k} {v.get('violated_rate')}"
+                                  for k, v in (aggregate.get("by_arm") or {}).items()))
     print(json.dumps(status, ensure_ascii=False, indent=2))
     if status["infra_rate"] > limit:
         return 4
@@ -426,6 +461,9 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--max-new", type=int, default=0,
                         help="이번 호출에서 새로 실행할 최대 시행 수(0=전부, 긴 런의 안전한 청크용)")
+    parser.add_argument("--ban-reps", type=int, default=1,
+                        help="금지어 팔의 조합당 반복 횟수(기본 1 = 팔당 n=11). n 을 늘려야 "
+                             "'개수 사다리'가 회차 변동인지 실제 경향인지 가른다.")
     parser.add_argument("--control-reps", type=int, default=0,
                         help="통제군 반복 수 override(0=케이스 파일 값). 느린 모델용")
     parser.add_argument("--num-ctx", type=int, default=0,

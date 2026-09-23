@@ -27,7 +27,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from pii_score import PII_TYPES, score_run_dir, validate_cases
+from pii_score import PII_TYPES, score_generation, score_run_dir, validate_cases
+from live_mark import mark
 
 HARNESS_VERSION = "1.0"
 DEFAULT_CASES = Path(__file__).with_name("pii_bench_cases.json")
@@ -290,6 +291,7 @@ def run_benchmark(args: argparse.Namespace) -> int:
                     plan.append((key, arm, document, repeat))
     print(f"model={args.model} mode={args.mode} num_ctx={args.num_ctx} pending={len(plan)}", flush=True)
 
+    break_shot = True          # ★break = 첫 「심어둔 개인정보가 그대로 남은」 순간 1회(게재 예산상 대표 장면).
     for index, (key, arm, document, repeat) in enumerate(plan, 1):
         run_id += 1
         prompt_text = build_prompt(data, arm, document)
@@ -316,10 +318,27 @@ def run_benchmark(args: argparse.Namespace) -> int:
             "infra_error": infra_error,
         }
         _write_records(run_dir, run_id, record, prompt_text, response, response_text)
+        row = score_generation(document, record, response_text)
+        if break_shot and row.get("pii_leaked"):
+            break_shot = False
+            leaked_types = ", ".join(
+                sorted({item["type"] for item in row["instances"] if item["leaked"]})
+            )
+            mark(
+                "break",
+                f"첫 유출 — {key} · 잔존 {row['pii_leaked']}/{row['pii_total']}건 · 유형 {leaked_types}",
+            )
         print(f"[{index}/{len(plan)}] {key} {record['elapsed_s']}s"
               + (f" ERROR={infra_error}" if infra_error else ""), flush=True)
 
     rows, aggregate = score_run_dir(run_dir)
+    overall = aggregate.get("overall") or {}
+    mark(
+        "agg",
+        f"PII 마스킹 집계 — 잔존 {overall.get('pii_leaked')}/{overall.get('pii_instances')}건 · "
+        f"유출률 {overall.get('leak_rate')} · 보존소실 {overall.get('must_keep_dropped')} · "
+        f"infra={aggregate.get('infra_errors')}",
+    )
     metadata = {}
     metadata_dir = run_dir / "model_metadata"
     if metadata_dir.exists():

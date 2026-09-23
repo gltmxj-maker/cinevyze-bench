@@ -26,6 +26,8 @@ from pathlib import Path
 from typing import Any
 
 from needle_score import score_run_dir
+from needle_score import score_one as _score_one_for_marker
+from live_mark import mark as live_mark
 
 HARNESS_VERSION = "1.0"
 DEFAULT_CASES = Path(__file__).with_name("needle_bench_cases.json")
@@ -271,6 +273,39 @@ def _git_sha() -> str | None:
     except (OSError, subprocess.CalledProcessError):
         return None
 
+_LENGTH_LABELS = {
+    "L1-2k": "2천자",
+    "L2-8k": "8천자",
+    "L3-24k": "2만4천자",
+    "L4-48k": "4만8천자",
+}
+
+def _marker_state(run_dir: Path) -> dict[str, bool]:
+    """재개 실행 시 기존 회차를 재판정해 마커 상태만 복원한다(마커는 발사하지 않는다).
+
+    score_run_dir()을 쓰면 파일럿이 미완인 시점에 pilot_decision.json 을 조기에 쓸 수 있어
+    상태 복원용으로 못 쓴다 — raw/*-invocation.json 과 대응 응답만 직접 판정한다.
+    """
+    state = {"first_recall_miss": False, "first_distractor": False, "ctx_saturation": False}
+    for invocation_path in sorted((run_dir / "raw").glob("*-invocation.json")):
+        try:
+            invocation = json.loads(invocation_path.read_text(encoding="utf-8"))
+            response_path = run_dir / invocation["response_file"]
+            response = response_path.read_text(encoding="utf-8") if response_path.exists() else ""
+            scored = _score_one_for_marker(invocation, response)
+        except (OSError, json.JSONDecodeError, ValueError, KeyError):
+            continue
+        if invocation.get("arm") == "haystack" and scored.get("scored") and scored["outcome"] != "hit":
+            state["first_recall_miss"] = True
+            if scored["outcome"] == "distractor":
+                state["first_distractor"] = True
+        metrics = invocation.get("api_metrics") or {}
+        if (invocation.get("ctx_mode") == "explicit"
+                and invocation.get("num_ctx") and metrics.get("prompt_eval_count")
+                and metrics["prompt_eval_count"] >= invocation["num_ctx"]):
+            state["ctx_saturation"] = True
+    return state
+
 
 def _compare_rows(run_dir: Path) -> list[dict[str, Any]]:
     """Read back from the scored aggregate — never hand-written.
@@ -414,6 +449,15 @@ def run_benchmark(args: argparse.Namespace) -> int:
     print(f"mode={args.mode} planned={len(plan)} existing={len(plan) - pending_total} "
           f"pending_total={pending_total} running_now={len(pending)} num_ctx={args.num_ctx}")
 
+    seen_turn_conditions: set[tuple[str, str, bool, str]] = set()
+    marker_flags = _marker_state(args.run_dir)
+    marker_flags.setdefault("control_anomaly", False)
+    if existing_keys:
+        restored = sum(marker_flags.values())
+        print(f"[marker] 재개 실행 — 기존 {len(existing_keys)}회에서 마커 상태 복원(발사 0회): "
+              f"회상실패={marker_flags['first_recall_miss']} 방해값흡입={marker_flags['first_distractor']} "
+              f"컨텍스트포화={marker_flags['ctx_saturation']}")
+
     if pending:
         metadata = model_metadata(args.base_url, args.model, args.timeout)
     elif (args.run_dir / "run.yaml").exists():
@@ -425,6 +469,7 @@ def run_benchmark(args: argparse.Namespace) -> int:
     for position_index, row in enumerate(pending, 1):
         next_id += 1
         needle = row["needle"]
+        turn_signature = (row["arm"], str(row["length"]), bool(row["distractors"]), row["ctx_mode"])
         if row["arm"] == "control":
             prompt_text = build_control_prompt(data, needle)
             built = {"doc_chars": len(prompt_text), "clause_count": 1, "needle_clause_index": 1,
@@ -433,13 +478,31 @@ def run_benchmark(args: argparse.Namespace) -> int:
             built = build_document(data, row["length"], needle, row["position"], row["distractors"])
             prompt_text = build_prompt(data, built["document"], needle)
 
+        if turn_signature not in seen_turn_conditions:
+            seen_turn_conditions.add(turn_signature)
+            length_label = _LENGTH_LABELS.get(row["length"], str(row["length"]))
+            if row["arm"] == "control":
+                live_mark("turn", f"대조군 시작 — 사실 한 줄만 제시 · 문항 {len(data['needles'])}종 · 모델 {args.model}")
+            elif row["ctx_mode"] == "default":
+                live_mark("turn", f"컨텍스트 조건 전환 — {length_label} · 방해 조항 없음 · num_ctx 미지정")
+            else:
+                live_mark("turn", f"문서 조건 전환 — {length_label} · 방해 조항 {'있음' if row['distractors'] else '없음'} · num_ctx {args.num_ctx}")
+
         effective_ctx = args.num_ctx if row["ctx_mode"] == "explicit" else None
         response, attempts, infra_error, payload = generate(
             args.base_url, args.model, prompt_text, effective_ctx, args.timeout)
+        if any(attempt.get("error") for attempt in attempts):
+            if infra_error:
+                live_mark("infra", f"생성 실패 — {row['key']} · {len(attempts)}회 시도 · {infra_error}")
+            else:
+                live_mark("infra", f"API 재시도 발생 — {row['key']} · 1차 {attempts[0].get('error')} · {len(attempts)}차에 응답 수신")
         response_value = response.get("response") if response is not None else None
         if response is not None and not isinstance(response_value, str):
             infra_error = infra_error or "invalid_api_response: response 필드가 문자열이 아님"
         response_text = response_value if isinstance(response_value, str) else ""
+        if infra_error or not response_text.strip():
+            reason = infra_error or ("빈 응답" if not response_text.strip() else "비정상 response 필드")
+            live_mark("infra", f"응답 기록 불가 — {row['key']} · {reason}")
 
         stem = f"{next_id:03d}"
         response_rel = f"raw/{stem}-response.txt"
@@ -488,6 +551,40 @@ def run_benchmark(args: argparse.Namespace) -> int:
         }
         (args.run_dir / invocation_rel).write_text(
             json.dumps(invocation, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        try:
+            marker_score = _score_one_for_marker(invocation, response_text)
+        except Exception as exc:  # 즉시 채점 계약이 깨지면 정상 집계인 척 넘어가지 않는다.
+            live_mark("infra", f"즉시 채점 실패 — {row['key']} · {type(exc).__name__} · 최종 집계 전 확인 필요")
+            raise
+        if (row["arm"] == "haystack" and marker_score.get("scored")
+                and marker_score["outcome"] != "hit"):
+            if marker_score["outcome"] == "distractor":
+                if not marker_flags["first_distractor"]:
+                    marker_flags["first_distractor"] = True
+                    position_pct = round(float(row["position"]) * 100)
+                    live_mark("break", f"첫 방해값 흡입 — {row['key']} · 정답 {needle['answer_label']} 대신 방해값 {marker_score.get('matched_distractor')} 응답 · 심은 위치 {position_pct}% · num_ctx {'명시' if row['ctx_mode'] == 'explicit' else '미지정'}")
+                marker_flags["first_recall_miss"] = True
+            elif not marker_flags["first_recall_miss"]:
+                marker_flags["first_recall_miss"] = True
+                position_pct = round(float(row["position"]) * 100)
+                if marker_score["outcome"] == "abstain":
+                    tail = "문서에 없다고 응답"
+                else:
+                    head = " ".join((marker_score.get("response_head") or "").split())[:60]
+                    tail = f"관측 {head}"
+                live_mark("break", f"첫 사실 회상 실패 — {row['key']} · {built['doc_chars']}자 문서 · 심은 위치 {position_pct}% · {tail} · num_ctx {'명시' if row['ctx_mode'] == 'explicit' else '미지정'}")
+        if row["arm"] == "control" and marker_score.get("scored") and marker_score["outcome"] != "hit":
+            if not marker_flags["control_anomaly"]:
+                marker_flags["control_anomaly"] = True
+                live_mark("infra", f"대조군 회상 실패 — {row['key']} · 사실 한 줄 조건에서도 {marker_score['outcome']} · 질문 또는 채점기 확인 필요")
+        metrics_now = invocation.get("api_metrics") or {}
+        if (row["ctx_mode"] == "explicit" and invocation.get("num_ctx")
+                and metrics_now.get("prompt_eval_count")
+                and metrics_now["prompt_eval_count"] >= invocation["num_ctx"]
+                and not marker_flags["ctx_saturation"]):
+            marker_flags["ctx_saturation"] = True
+            live_mark("infra", f"명시 컨텍스트 포화 — {row['key']} · 입력 {metrics_now['prompt_eval_count']}토큰 · num_ctx {invocation['num_ctx']} · 위치 효과 판정 중단 대상")
         write_run_yaml(args.run_dir, args.model, metadata, data, args.num_ctx)
         tokens = (invocation["api_metrics"] or {}).get("prompt_eval_count")
         print(f"[{position_index}/{len(pending)}] {row['key']} elapsed={invocation['elapsed_s']}s "
@@ -495,7 +592,25 @@ def run_benchmark(args: argparse.Namespace) -> int:
 
     rows, aggregate = score_run_dir(args.run_dir)
     write_run_yaml(args.run_dir, args.model, metadata, data, args.num_ctx)
+    if args.mode == "pilot" and (args.run_dir / "pilot_decision.json").exists():
+        decision = json.loads((args.run_dir / "pilot_decision.json").read_text(encoding="utf-8"))
+        control = aggregate.get("control") or {}
+        if decision.get("proceed"):
+            live_mark("agg", f"파일럿 집계 완료 — {decision.get('runs')}회 · 대조군 {control.get('hit')}/{control.get('scored')} · infra {aggregate.get('infra_errors')}건 · 본런 진행")
+        else:
+            reasons = " · ".join(decision.get("reasons") or [])
+            live_mark("agg", f"파일럿 집계 완료 — {decision.get('runs')}회 · 본런 중단 · 사유 {reasons}")
     print(json.dumps(aggregate, ensure_ascii=False, indent=2))
+    if args.mode == "full":
+        overall = aggregate.get("overall") or {}
+        without = (aggregate.get("by_distractor") or {}).get("없음") or {}
+        with_d = (aggregate.get("by_distractor") or {}).get("있음") or {}
+        live_mark("agg", f"긴 문서 회상 집계 완료 — 전체 기록 {len(rows)}회 · "
+                  f"명시 컨텍스트 {overall.get('hit')}/{overall.get('scored')} · "
+                  f"방해 없음 {without.get('hit')}/{without.get('scored')} · "
+                  f"방해 있음 {with_d.get('hit')}/{with_d.get('scored')} · "
+                  f"방해값 흡입 {with_d.get('distractor_pull')}/{with_d.get('scored')} · "
+                  f"infra {aggregate.get('infra_errors')}건")
     if args.mode == "pilot":
         decision = json.loads((args.run_dir / "pilot_decision.json").read_text(encoding="utf-8"))
         if not decision["proceed"]:

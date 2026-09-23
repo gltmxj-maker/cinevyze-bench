@@ -26,12 +26,28 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from selfgrade_score import answer_is_correct, score_run_dir
+from selfgrade_score import answer_is_correct, score_grade, score_run_dir
+try:
+    from live_mark import mark as _live_mark
+except Exception:  # capture observer is optional to the measurement itself
+    def _live_mark(kind: str, text: str) -> None:
+        return None
 
 HARNESS_VERSION = "1.0"
 DEFAULT_CASES = Path(__file__).with_name("selfgrade_bench_cases.json")
 DEFAULT_RUN_DIR = Path(__file__).with_name("test_runs") / "ollama-selfgrade-20260803"
 ARMS = ("blind", "solve_first", "with_key")
+
+
+def live_mark(kind: str, text: str) -> None:
+    """Emit capture metadata without letting the observer alter the benchmark."""
+    try:
+        _live_mark(kind, text.replace("\r", " ").replace("\n", " "))
+    except Exception as exc:  # noqa: BLE001 - capture failure must not truncate measurements
+        try:
+            print(f"[capture-warning] {type(exc).__name__}", flush=True)
+        except Exception:  # noqa: BLE001 - even a closed stdout must not alter the run
+            pass
 
 
 def load_cases(path: Path) -> dict[str, Any]:
@@ -290,7 +306,12 @@ def stage_answer(args: argparse.Namespace, data: dict[str, Any]) -> int:
         json.dumps({"modified_at": metadata.get("modified_at"), "details": metadata.get("details"),
                     "parameters": metadata.get("parameters")}, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    wrong_seen = False
+    announced_categories: set[str] = set()
     for index, question in enumerate(pending, 1):
+        if question["category"] not in announced_categories:
+            announced_categories.add(question["category"])
+            live_mark("turn", f"답안 단계 · {question['category']} 문항 — 정답키는 모델에게 주지 않는다")
         run_id += 1
         prompt_text = build_answer_prompt(question)
         response, attempts, infra_error, payload = generate(
@@ -315,6 +336,14 @@ def stage_answer(args: argparse.Namespace, data: dict[str, Any]) -> int:
         _write_records(args.run_dir, run_id, "answer", record, prompt_text, response, response_text)
         print(f"[{index}/{len(pending)}] {record['key']} elapsed={record['elapsed_s']}s"
               + (f" ERROR={infra_error}" if infra_error else ""), flush=True)
+        if infra_error:
+            live_mark("infra", f"{record['key']} 응답 실패 — {infra_error}")
+        elif not wrong_seen:
+            correct, matched = answer_is_correct(question["answer_aliases"], response_text)
+            if not correct:
+                wrong_seen = True
+                live_mark("break", f"첫 오답 — {record['key']} · 답변 ‘{response_text.strip()[:80]}’ · "
+                                   f"정답 별칭 {question['answer_aliases'][:2]}")
     return 0
 
 
@@ -323,6 +352,8 @@ def stage_grade(args: argparse.Namespace, data: dict[str, Any]) -> int:
     for path in sorted((args.run_dir / "raw").glob("*-answer.json")):
         row = json.loads(path.read_text(encoding="utf-8"))
         response_path = args.run_dir / row["response_file"]
+        if not response_path.exists():
+            row["infra_error"] = row.get("infra_error") or f"응답 파일 없음: {row['response_file']}"
         row["answer_text"] = response_path.read_text(encoding="utf-8") if response_path.exists() else ""
         answers.append(row)
     if not answers:
@@ -345,7 +376,12 @@ def stage_grade(args: argparse.Namespace, data: dict[str, Any]) -> int:
         return 0
     metadata = model_metadata(args.base_url, args.model, args.timeout)
 
+    disagreement_seen = False
+    announced_arms: set[str] = set()
     for index, (key, answer, arm) in enumerate(plan, 1):
+        if arm not in announced_arms:
+            announced_arms.add(arm)
+            live_mark("turn", f"채점 방식 '{arm}' — 같은 답을 같은 모델이 다시 판정한다")
         run_id += 1
         question = questions[answer["question_id"]]
         prompt_text = build_grade_prompt(question, answer["answer_text"], arm)
@@ -375,6 +411,14 @@ def stage_grade(args: argparse.Namespace, data: dict[str, Any]) -> int:
         _write_records(args.run_dir, run_id, "grade", record, prompt_text, response, response_text)
         print(f"[{index}/{len(plan)}] {key} truth={'O' if record['answer_correct'] else 'X'} "
               f"elapsed={record['elapsed_s']}s" + (f" ERROR={infra_error}" if infra_error else ""), flush=True)
+        if infra_error:
+            live_mark("infra", f"{key} 채점 응답 실패 — {infra_error}")
+        elif not disagreement_seen:
+            scored = score_grade(record, response_text)
+            if scored["outcome"] in {"false_pass", "false_fail"}:
+                disagreement_seen = True
+                live_mark("break", f"첫 오판 — {key} · 진실 {'정답' if record['answer_correct'] else '오답'} / "
+                                   f"모델 판정 {scored['verdict']} · 답 ‘{answer['answer_text'].strip()[:60]}’")
     return 0
 
 
@@ -415,6 +459,9 @@ def run_benchmark(args: argparse.Namespace) -> int:
         for path in sorted(metadata_dir.glob("*.json")):
             metadata[path.stem] = json.loads(path.read_text(encoding="utf-8"))
     write_run_yaml(args.run_dir, metadata, _models_seen(args.run_dir))
+    live_mark("agg", f"집계 완료({args.mode}/{args.stage}) — 답안 {len(aggregate.get('answer_accuracy') or {})}모델 · "
+                     f"채점 {((aggregate.get('overall') or {}).get('scored'))}회 · 오답 통과 "
+                     f"{((aggregate.get('overall') or {}).get('false_pass'))}회 · infra {aggregate.get('infra_errors')}회")
     print(json.dumps(aggregate, ensure_ascii=False, indent=2))
     if args.mode == "pilot" and (args.run_dir / "pilot_decision.json").exists():
         decision = json.loads((args.run_dir / "pilot_decision.json").read_text(encoding="utf-8"))

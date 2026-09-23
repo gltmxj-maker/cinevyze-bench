@@ -23,7 +23,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from length_score import score_run_dir
+from live_mark import mark as live_mark
+from length_score import score_one, score_run_dir
 
 HARNESS_VERSION = "1.0"
 DEFAULT_CASES = Path(__file__).with_name("length_bench_cases.json")
@@ -284,6 +285,9 @@ def run_benchmark(args: argparse.Namespace) -> int:
     print(f"mode={args.mode} planned={len(plan)} existing={len(plan) - pending_total} "
           f"pending_total={pending_total} running_now={len(pending)}")
 
+    miss_seen = False            # 실촬영 마커용 — 크게 빗나간 첫 회차 1회만 알린다
+    last_prompt = None           # ★목표 글자수는 회차마다 교대로 돌아간다(100→300→500→800→300→…).
+                                 #   목표를 전환점으로 잡으면 마커가 매 행 터진다. 진짜 구간은 글감이다.
     if pending:
         metadata = model_metadata(args.base_url, args.model, args.timeout)
     elif (args.run_dir / "run.yaml").exists():
@@ -338,8 +342,26 @@ def run_benchmark(args: argparse.Namespace) -> int:
         write_run_yaml(args.run_dir, args.model, metadata, data["length_targets"])
         print(f"[{position}/{len(pending)}] {row['key']} elapsed={invocation['elapsed_s']}s"
               + (f" ERROR={infra_error}" if infra_error else ""), flush=True)
+        if row["prompt"]["id"] != last_prompt:
+            last_prompt = row["prompt"]["id"]
+            live_mark("turn", f"글감 {row['prompt']['id']}({row['prompt']['genre']}) 시작 — "
+                              f"같은 글감에 목표 글자수를 바꿔 가며 시킨다")
+        if infra_error:
+            live_mark("infra", f"{row['key']} 회차가 응답을 못 받았다 — {infra_error}")
+        # ★실촬영 마커 — 빗나간 정도는 정제·계수해야만 안다. 화면에는 `elapsed=…` 만 흐른다.
+        #   score_one 은 순수 함수라 값을 바꾸지 않는다(최종 집계는 score_run_dir 이 다시 낸다).
+        elif not miss_seen:
+            try:
+                _one = score_one(invocation, response_text)
+                if not _one["empty"] and not _one["within_20"]:
+                    miss_seen = True
+                    live_mark("break", f"첫 크게 빗나감 — {row['key']} · 목표 {_one['target']}자에 "
+                                       f"실제 {_one['chars']}자({_one['error_pct']:+.1f}%)")
+            except Exception as _e:                      # noqa: BLE001 - 촬영 보조라 측정을 막지 않는다
+                live_mark("infra", f"즉시채점 건너뜀({type(_e).__name__})")
 
     write_run_yaml(args.run_dir, args.model, metadata, data["length_targets"])
+    live_mark("agg", f"집계 시작({args.mode}) — 회차 기록을 다시 읽어 최종 계수한다")
     results, aggregate = score_run_dir(args.run_dir)
     # Scoring writes aggregate.json, which is where the compare rows come from — so the
     # manifest is rewritten once more to carry them.
@@ -356,6 +378,12 @@ def run_benchmark(args: argparse.Namespace) -> int:
         "chunk_limited": chunk_limited,
         "pilot_decision": aggregate.get("pilot_decision"),
     }
+    _ov = aggregate.get("overall") or {}
+    live_mark("agg", f"집계 완료({args.mode}) — ±10% 안 {_ov.get('within_10')}/{_ov.get('scored')}회 · "
+                     f"±20% 안 {_ov.get('within_20')}회 · 중앙 오차 {_ov.get('median_error_pct')}% · "
+                     f"목표별 ±10% "
+                     + " · ".join(f"{k}자 {v.get('within_10')}/{v.get('scored')}"
+                                  for k, v in (aggregate.get("by_target") or {}).items()))
     (args.run_dir / "run_status.json").write_text(
         json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8"
     )

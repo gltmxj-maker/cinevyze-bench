@@ -14,7 +14,10 @@ python3 run_<name>_bench.py --help
 python3 <name>_score.py --help
 ```
 
-모델 경로 등 기계마다 다른 값은 환경변수로 받습니다 — `QUANT_MODELS_DIR`, `APISR4X_PATH`.
+모델 경로 등 기계마다 다른 값은 환경변수로 받습니다 — `QUANT_MODELS_DIR`, `APISR4X_PATH`, `APISR2X_PATH`, `REMBG_MODEL_DIR`.
+Vertex AI 로 부르는 하네스(`vertex_gemini.py`)는 서비스 계정 키 파일 경로를 `VERTEX_SA_FILE` 로 받습니다(키는 저장소에 없습니다).
+
+`run_repro.py`·`run_quant.py` 는 원본 저장소의 내부 모듈(`testset`·`tool_test_harness`)을 import 해서 이 저장소만으로는 돌지 않습니다. 채점기(`repro_score.py`)와 조건은 그대로 읽을 수 있습니다.
 
 ## 하네스 ↔ 글
 
@@ -22,6 +25,8 @@ python3 <name>_score.py --help
 |---|---|---|
 | `automation` | `automation_bench.py` | [해당 글](https://www.cinevyze.com/2026/06/ai-automate-repetitive-excel-task-2026.html) |
 | `banword` | `banword_bench_cases.json` · `banword_score.py` · `run_banword_bench.py` | [해당 글](https://www.cinevyze.com/2026/08/ai-banned-word-instruction-compliance-tested-2026_07952645.html) |
+| `excel-merge` | `run_excel_merge_bench.py` · `vertex_gemini.py` | [해당 글](https://www.cinevyze.com/2026/06/ai-automate-repetitive-excel-task-2026.html) |
+| `gemini-tasks` | `run_gemini_tasks_bench.py` · `gemini_tasks_score.py` · `gemini_tasks_cases.json` · `vertex_gemini.py` | [해당 글](https://www.cinevyze.com/2026/06/gemini-31-pro-9-20266.html) |
 | `format` | `format_bench_cases.json` · `format_score.py` · `plot_format_bench.py` · `run_format_bench.py` | [해당 글](https://www.cinevyze.com/2026/07/ai-output-format-json-csv-markdown-parsing-tested-2026.html) |
 | `hangul` | `hangul_img_cases.json` · `hangul_score.py` · `run_hangul_img.py` | [해당 글](https://www.cinevyze.com/2026/07/sdxl-hangul-text-in-image-rendering-tested-2026.html) |
 | `injection` | `injection_bench_cases.json` · `injection_score.py` · `run_injection_bench.py` | [해당 글](https://www.cinevyze.com/2026/08/prompt-injection-defense-wording-tested-2026.html) |
@@ -37,12 +42,13 @@ python3 <name>_score.py --help
 | `pii` | `pii_bench_cases.json` · `pii_score.py` · `run_pii_bench.py` | [해당 글](https://www.cinevyze.com/2026/08/ai-korean-pii-masking-leak-rate-tested-2026.html) |
 | `prompt4` | `prompt4_bench_cases.json` · `prompt4_score.py` · `run_prompt4_bench.py` | [해당 글](https://www.cinevyze.com/2026/06/how-to-write-ai-prompts-4-part-framework-2026.html) |
 | `quant` | `run_quant.py` | [해당 글](https://www.cinevyze.com/2026/07/local-ai-quantization-q4-vs-q8-korean-tested-2026.html) |
-| `rag` | `rag_bench.py` | [해당 글](https://www.cinevyze.com/2026/07/local-rag-korean-documents-tested-2026.html) |
+| `rag` | `run_rag_bench.py` · `rag_score.py` · `rag_bench_cases.json` · `rag_bench.py`(첫 런) | [해당 글](https://www.cinevyze.com/2026/07/local-rag-korean-documents-tested-2026.html) |
 | `repro` | `repro_score.py` · `run_repro.py` | [해당 글](https://www.cinevyze.com/2026/07/ai-same-prompt-different-answer-reproducibility-tested-2026.html) |
 | `selfgrade` | `run_selfgrade_bench.py` · `selfgrade_bench_cases.json` · `selfgrade_score.py` | [해당 글](https://www.cinevyze.com/2026/08/ai-self-grading-reliability-tested-2026.html) |
 | `summary` | `corpus/summary/` · `corpus/txt01-source.txt` · `run_summary_bench.py` · `summary_score.py` | [해당 글](https://www.cinevyze.com/2026/07/ai-summary-local-gemma3-vs-gemini-accuracy-tested-2026.html) |
 | `translate` | `translate_bench.py` | [해당 글](https://www.cinevyze.com/2026/06/offline-local-ai-translation-gemma3-2026.html) |
 | `upscale` | `upscale_bench.py` | [해당 글](https://www.cinevyze.com/2026/06/ai-image-upscaler-tested-2026.html) |
+| `writing` | `run_writing_bench.py` · `writing_score.py` · `writing_bench_cases.json` | [해당 글](https://www.cinevyze.com/2026/07/free-local-ai-blog-writing-4-models-tested-2026.html) |
 
 ## 같은 방법론으로 측정한 다른 글
 
@@ -79,9 +85,7 @@ python3 <name>_score.py --help
 - [무료 로컬 AI로 맞춤법·문장 교정, 진짜 고쳐줄까 — 오류 심은 초안 실측 (2026)](https://www.cinevyze.com/2026/07/local-free-ai-korean-proofreading-tested-2026.html)
 - [AI 문서요약, 클라우드가 무조건 나을까 — 로컬 gemma3 vs Gemini 정확도·속도 실측 (2026)](https://www.cinevyze.com/2026/07/ai-summary-local-gemma3-vs-gemini-accuracy-tested-2026.html)
 - [클로드 무료 제한, 진짜 몇 개일까 — 공식 문서엔 그 숫자가 아예 없습니다 (2026.7)](https://www.cinevyze.com/2026/07/claude-free-plan-limits-vs-pro-2026.html)
-- [무료 로컬 AI로 블로그 글, 진짜 되나? — 내 PC에서 무료 모델 4개 직접 돌려본 실측 (2026.7)](https://www.cinevyze.com/2026/07/free-local-ai-blog-writing-4-models-tested-2026.html)
 - [챗GPT·클로드·제미나이 요금 비교 — '셋 다 20달러'가 아니었습니다 (2026.07)](https://www.cinevyze.com/2026/06/chatgpt-claude-gemini-same-task-comparison-2026.html)
-- [Gemini 3.1 Pro한테 코딩·요약·번역 직접 시켜봤다 — 같은 작업 9번 굴려본 실측 (2026.6)](https://www.cinevyze.com/2026/06/gemini-31-pro-9-20266.html)
 
 ### AI 활용가이드
 
