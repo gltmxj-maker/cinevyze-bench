@@ -32,7 +32,7 @@ ARMS = ("spell", "polish")
 
 def _clean(text: str) -> str:
     t = (text or "").strip()
-    t = re.sub(r"^```[a-z]*\s*|\s*```$", "", t)
+    t = re.sub(r"(?m)^\s*```[a-z]*\s*$", "", t)     # 코드펜스 줄은 위치와 상관없이 지운다(T2)
     t = re.sub(r"\*\*|__", "", t)
     return t.strip()
 
