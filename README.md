@@ -26,6 +26,7 @@ Vertex AI 로 부르는 하네스(`vertex_gemini.py`)는 서비스 계정 키 �
 | `automation` | `automation_bench.py` | [해당 글](https://www.cinevyze.com/2026/06/ai-automate-repetitive-excel-task-2026.html) |
 | `banword` | `banword_bench_cases.json` · `banword_score.py` · `run_banword_bench.py` | [해당 글](https://www.cinevyze.com/2026/08/ai-banned-word-instruction-compliance-tested-2026_07952645.html) |
 | `excel-merge` | `run_excel_merge_bench.py` · `vertex_gemini.py` | [해당 글](https://www.cinevyze.com/2026/06/ai-automate-repetitive-excel-task-2026.html) |
+| `facts` | `run_facts_bench.py` · `facts_score.py` · `facts_bench_cases.json` | [해당 글](https://www.cinevyze.com/2026/07/local-free-ai-korean-facts-hallucination-tested-2026.html) |
 | `gemini-tasks` | `run_gemini_tasks_bench.py` · `gemini_tasks_score.py` · `gemini_tasks_cases.json` · `vertex_gemini.py` | [해당 글](https://www.cinevyze.com/2026/06/gemini-31-pro-9-20266.html) |
 | `format` | `format_bench_cases.json` · `format_score.py` · `plot_format_bench.py` · `run_format_bench.py` | [해당 글](https://www.cinevyze.com/2026/07/ai-output-format-json-csv-markdown-parsing-tested-2026.html) |
 | `hangul` | `hangul_img_cases.json` · `hangul_score.py` · `run_hangul_img.py` | [해당 글](https://www.cinevyze.com/2026/07/sdxl-hangul-text-in-image-rendering-tested-2026.html) |
@@ -41,6 +42,7 @@ Vertex AI 로 부르는 하네스(`vertex_gemini.py`)는 서비스 계정 키 �
 | `offline-translate` | `corpus/translate/` · `offline_translate_score.py` · `run_offline_translate_bench.py` | [해당 글](https://www.cinevyze.com/2026/06/offline-local-ai-translation-gemma3-2026.html) |
 | `pii` | `pii_bench_cases.json` · `pii_score.py` · `run_pii_bench.py` | [해당 글](https://www.cinevyze.com/2026/08/ai-korean-pii-masking-leak-rate-tested-2026.html) |
 | `prompt4` | `prompt4_bench_cases.json` · `prompt4_score.py` · `run_prompt4_bench.py` | [해당 글](https://www.cinevyze.com/2026/06/how-to-write-ai-prompts-4-part-framework-2026.html) |
+| `proofread` | `run_proofread_bench.py` · `proofread_score.py` · `proofread_bench_cases.json` | *(재측정 글 준비 중)* |
 | `quant` | `run_quant.py` | [해당 글](https://www.cinevyze.com/2026/07/local-ai-quantization-q4-vs-q8-korean-tested-2026.html) |
 | `rag` | `run_rag_bench.py` · `rag_score.py` · `rag_bench_cases.json` · `rag_bench.py`(첫 런) | [해당 글](https://www.cinevyze.com/2026/07/local-rag-korean-documents-tested-2026.html) |
 | `repro` | `repro_score.py` · `run_repro.py` | [해당 글](https://www.cinevyze.com/2026/07/ai-same-prompt-different-answer-reproducibility-tested-2026.html) |
@@ -89,7 +91,6 @@ Vertex AI 로 부르는 하네스(`vertex_gemini.py`)는 서비스 계정 키 �
 
 ### AI 활용가이드
 
-- [무료 로컬 AI, 한국 상식 얼마나 맞히나 — 함정질문에 지어내는 놈 실측 (2026)](https://www.cinevyze.com/2026/07/local-free-ai-korean-facts-hallucination-tested-2026.html)
 - [AI 답변, 그대로 믿었다간 — 환각 거르는 법(고정 질문 5개로 직접 잡아봤습니다)](https://www.cinevyze.com/2026/07/how-to-catch-verify-ai-hallucinations-2026.html)
 - [AI한테 일 제대로 시키는 법 — 프롬프트 4칸 공식(같은 모델에 18번 넣어 재봤습니다)](https://www.cinevyze.com/2026/06/how-to-write-ai-prompts-4-part-framework-2026.html)
 
