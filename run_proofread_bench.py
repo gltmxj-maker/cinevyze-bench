@@ -60,8 +60,10 @@ def api_get(url: str, timeout: int) -> dict[str, Any]:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def generate(base: str, model: str, prompt: str, timeout: int):
+def generate(base: str, model: str, prompt: str, timeout: int, num_ctx: int | None = None):
     payload = {"model": model, "prompt": prompt, "stream": False}
+    if num_ctx:
+        payload["options"] = {"num_ctx": num_ctx}
     attempts = []
     for attempt in (1, 2):
         t0 = time.monotonic()
@@ -163,7 +165,7 @@ def write_run_yaml(run_dir: Path, model: str, meta: dict[str, Any], date: str | 
         "tos_source_url": "로컬 오픈웨이트 모델(자체 구동·구독/계정 무관) · 초안=자작(D01 은 첫 런 지문)",
         "arms": {k: ARM_KO[k] for k in ARMS}, "reps": REPS,
         "options": {"temperature": "미지정(모델 기본값)", "seed": "미지정", "think": "미지정(모델 기본값)",
-                    "num_ctx": "미지정(서버 기본값)", "num_predict": "미지정(서버 기본값)"},
+                    "num_ctx": meta.get("num_ctx") or "미지정(서버 기본값)", "num_predict": "미지정(서버 기본값)"},
         "request_parallelism": 1,
         "compare": compare,
         "environment": {"python": platform.python_version(), "platform": platform.platform(),
@@ -214,7 +216,7 @@ def run(args: argparse.Namespace) -> int:
             return 3
     (run_dir / "raw").mkdir(parents=True, exist_ok=True)
     base = args.base_url.rstrip("/")
-    meta = {"ollama_version": None, "hardware": _gpu_name(), "model_metadata": None}
+    meta = {"ollama_version": None, "hardware": _gpu_name(), "model_metadata": None, "num_ctx": args.num_ctx}
     try:
         meta["ollama_version"] = api_get(base + "/api/version", args.timeout).get("version")
         show = api_json(base + "/api/show", {"model": args.model}, args.timeout)
@@ -242,7 +244,7 @@ def run(args: argparse.Namespace) -> int:
         prev = cur
         q = row["q"]
         prompt = build_prompt(q, cfg, row["arm"])
-        resp, attempts, infra = generate(base, args.model, prompt, args.timeout)
+        resp, attempts, infra = generate(base, args.model, prompt, args.timeout, args.num_ctx)
         text = (resp or {}).get("response", "") if isinstance((resp or {}).get("response", ""), str) else ""
         thinking = (resp or {}).get("thinking", "") if isinstance((resp or {}).get("thinking", ""), str) else ""
         if resp is not None and not text.strip() and not infra:
@@ -265,7 +267,8 @@ def run(args: argparse.Namespace) -> int:
                                                     "prompt_eval_count", "eval_count", "eval_duration")} if resp else None
         inv = {"run_id": next_id, "key": row["key"], "mode": args.mode, "did": q["id"],
                "arm": row["arm"], "rep": row["rep"], "prompt": prompt,
-               "payload": {"model": args.model, "stream": False}, "attempts": attempts,
+               "payload": {"model": args.model, "stream": False,
+                           **({"options": {"num_ctx": args.num_ctx}} if args.num_ctx else {})}, "attempts": attempts,
                "gen_s": round(sum(a["elapsed_s"] for a in attempts), 3), "infra_error": infra,
                "response_file": resp_rel, "thinking_file": think_rel, "thinking_chars": len(thinking),
                "transcript_file": tr_rel, "api_metrics": metrics}
@@ -325,6 +328,8 @@ def main() -> int:
     ap.add_argument("--run-dir", type=Path, default=DEFAULT_RUN_DIR)
     ap.add_argument("--base-url", default="http://127.0.0.1:11434")
     ap.add_argument("--timeout", type=int, default=600)
+    # 2026-09-23 파일럿: 서버 기본 문맥(4,096)에서 생각 토큰이 문맥을 다 써 4회 중 3회 빈 답 → 시네 승인으로 문맥만 늘린다
+    ap.add_argument("--num-ctx", type=int, default=None, help="Ollama options.num_ctx(생략 = 서버 기본값)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     if not args.mode and not args.rescore:
