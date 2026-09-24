@@ -1,0 +1,48 @@
+{
+  "version": "1.0",
+  "repetitions": 3,
+  "models": ["gemma3:4b", "qwen2.5-coder:7b"],
+  "tasks": [
+    {
+      "id": "TXT-02",
+      "function": "dedup_sort",
+      "example_required": true,
+      "prompt": "파이썬으로 주어진 정수 리스트에서 중복을 제거하고 내림차순 정렬하는 함수 dedup_sort(nums)를 작성하고, 예시 입력 [3,1,2,3,1]에 대한 출력도 보여줘.",
+      "require_no_mutation": false,
+      "cases": [
+        {"id": "original", "args": [[3, 1, 2, 3, 1]], "expected": [3, 2, 1]},
+        {"id": "empty", "args": [[]], "expected": []},
+        {"id": "same", "args": [[5, 5, 5]], "expected": [5]},
+        {"id": "negative", "args": [[-1, 2, -1, 0, 2]], "expected": [2, 0, -1]},
+        {"id": "mixed", "args": [[4, -2, 4, 7, 0, -2]], "expected": [7, 4, 0, -2]}
+      ]
+    },
+    {
+      "id": "ROTATE-01",
+      "function": "rotate_right",
+      "prompt": "파이썬 함수 rotate_right(nums, k)를 작성해줘. nums를 오른쪽으로 k칸 회전한 새 리스트를 반환해. k가 음수면 왼쪽으로 -k칸 회전한다. 빈 리스트면 []를 반환하고, 원본 nums는 바꾸지 마. 함수 코드를 보여줘.",
+      "require_no_mutation": true,
+      "cases": [
+        {"id": "one_step", "args": [[1, 2, 3, 4], 1], "expected": [4, 1, 2, 3]},
+        {"id": "empty", "args": [[], 10], "expected": []},
+        {"id": "negative", "args": [[1, 2, 3], -1], "expected": [2, 3, 1]},
+        {"id": "wrap", "args": [[1, 2, 3], 4], "expected": [3, 1, 2]},
+        {"id": "zero", "args": [[0, 0, 1], 0], "expected": [0, 0, 1]},
+        {"id": "single", "args": [[9], -5], "expected": [9]}
+      ]
+    },
+    {
+      "id": "BUGFIX-01",
+      "function": "merge_counts",
+      "prompt": "다음 파이썬 함수의 버그를 고쳐줘. 두 딕셔너리의 같은 키 값은 더하고, 한쪽에만 있는 키도 남겨야 해. 입력 left와 right는 바꾸지 않고 새 dict를 반환해. 수정한 함수 코드를 보여줘.\n\ndef merge_counts(left, right):\n    result = left\n    for key, value in right.items():\n        result[key] = value\n    return result",
+      "require_no_mutation": true,
+      "cases": [
+        {"id": "overlap", "args": [{"a": 2, "b": 1}, {"a": 3, "c": 4}], "expected": {"a": 5, "b": 1, "c": 4}},
+        {"id": "empty", "args": [{}, {}], "expected": {}},
+        {"id": "left_only", "args": [{"a": 2}, {}], "expected": {"a": 2}},
+        {"id": "right_only", "args": [{}, {"b": 7}], "expected": {"b": 7}},
+        {"id": "negative_zero", "args": [{"x": -2, "z": 0}, {"x": 5, "z": 0}], "expected": {"x": 3, "z": 0}}
+      ]
+    }
+  ]
+}
