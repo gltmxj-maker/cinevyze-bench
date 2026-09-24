@@ -1,6 +1,7 @@
 """SDXL 일러스트 실측의 제한적인 자동 지표. 미관·저작권·실사용 적합성은 판정하지 않는다."""
 from __future__ import annotations
 
+import csv
 import json
 import hashlib
 from pathlib import Path
@@ -71,6 +72,13 @@ def score_run_dir(run_dir: Path) -> dict:
                 raise ValueError(f"PNG SHA256 불일치: {path}")
         rescored.append(item)
     (run_dir / "results.json").write_text(json.dumps(rescored, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # 원고 담당의 writer-pack 이 필수 원자료로 읽는 표 — 다른 하네스와 같은 이름·위치.
+    columns = ["run_index", "task", "repeat", "seed", "status", "elapsed_s", "bytes", "width", "height",
+               "white_corner_fraction", "white_background_proxy_pass", "output_file", "sha256"]
+    with (run_dir / "results.csv").open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rescored)
     result = aggregate(rescored)
     (run_dir / "aggregate.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return result
