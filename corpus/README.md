@@ -11,4 +11,6 @@
 | `corpus/translate/s1-tech.txt` 외 2 | `translate_bench.py` | 번역 원문(기술문서·캐주얼 후기·비즈니스 메일) |
 | `corpus/ups/` | `upscale_bench.py` | 업스케일 대상 원본 이미지 |
 
+| `corpus/stt/` | `run_whisper_bench.py` | WAV 6개(`clip-01.wav`~`clip-06.wav`)와 같은 이름의 정답이 든 `refs.json`; 원 실험 입력은 FLEURS ko_kr test · CC-BY-4.0, 비공개 |
+
 경로는 `BENCH_CORPUS_DIR` 환경변수로 바꿀 수 있습니다.
