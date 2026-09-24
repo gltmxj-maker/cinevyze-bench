@@ -1,0 +1,27 @@
+{
+  "purpose": "AI 답을 받은 사람이 같은 답 세트에 적용하는 3개 거르기 절차 비교",
+  "model": "qwen2.5:7b",
+  "model_reason": "로컬 설치 확인, 텍스트 전용, 7B로 충분히 빠른 순차 반복; 큐의 Q8 경로는 29번 양자화 런",
+  "repetitions": 3,
+  "generation_options": {"temperature": 0, "seed": 30},
+  "prompt_prefix": "다음 문장이 사실인지 판단하세요. 반드시 첫 단어를 '맞다' 또는 '아니다'로 쓰고, 이어서 이유를 한 문장만 쓰세요. 자신 없으면 '모른다'로 시작하세요.\n문장: ",
+  "methods": {
+    "caution_words": "답의 '모른다/불확실/아마/확실하지'만 보이면 보류. 문장 출처를 열지 않는 빠른 점검",
+    "number_date_check": "답이 '맞다'이고 질문의 연도·수량이 공식 자료의 고정값과 어긋날 때 보류. 나머지는 통과",
+    "official_lookup": "공식 원문을 열어 고정 정답표와 답의 찬반을 직접 대조. 참/거짓 정답표를 알고 있는 상한 절차"
+  },
+  "questions": [
+    {"id":"H01","claim":"허블 우주망원경은 1990년에 발사됐다.","ground_truth":"true","official_number":"1990","evidence_url":"https://science.nasa.gov/missions/hubble/30-years-ago-hubble-launched-to-unlock-the-secrets-of-the-universe/","source_fact":"Hubble launched April 24, 1990"},
+    {"id":"H02","claim":"허블 우주망원경은 1992년에 발사됐다.","ground_truth":"false","official_number":"1990","evidence_url":"https://science.nasa.gov/missions/hubble/30-years-ago-hubble-launched-to-unlock-the-secrets-of-the-universe/","source_fact":"Hubble launched April 24, 1990"},
+    {"id":"H03","claim":"허블 우주망원경은 우주왕복선 챌린저로 발사됐다.","ground_truth":"false","official_number":null,"evidence_url":"https://science.nasa.gov/missions/hubble/30-years-ago-hubble-launched-to-unlock-the-secrets-of-the-universe/","source_fact":"Space Shuttle Discovery launched Hubble on STS-31"},
+    {"id":"H04","claim":"허블 우주망원경의 마지막 정비 임무는 2009년에 있었다.","ground_truth":"true","official_number":"2009","evidence_url":"https://science.nasa.gov/missions/hubble/30-years-ago-hubble-launched-to-unlock-the-secrets-of-the-universe/","source_fact":"Fifth and final Hubble Servicing Mission took place in May 2009"},
+    {"id":"W01","claim":"제임스 웹 우주망원경의 발사일은 2021년 12월 25일이다.","ground_truth":"true","official_number":"2021","evidence_url":"https://science.nasa.gov/mission/webb/fact-sheet/","source_fact":"Launch Date December 25, 2021"},
+    {"id":"W02","claim":"제임스 웹 우주망원경의 발사일은 2020년 12월 25일이다.","ground_truth":"false","official_number":"2021","evidence_url":"https://science.nasa.gov/mission/webb/fact-sheet/","source_fact":"Launch Date December 25, 2021"},
+    {"id":"W03","claim":"제임스 웹 우주망원경은 아리안 5 로켓으로 발사됐다.","ground_truth":"true","official_number":null,"evidence_url":"https://science.nasa.gov/mission/webb/fact-sheet/","source_fact":"Launch Vehicle Ariane 5 ECA"},
+    {"id":"W04","claim":"제임스 웹 우주망원경의 주거울 조각은 16개다.","ground_truth":"false","official_number":"18","evidence_url":"https://science.nasa.gov/mission/webb/fact-sheet/","source_fact":"Number of Primary Mirror Segments 18"},
+    {"id":"P01","claim":"퍼서비어런스 로버는 2021년에 화성에 착륙했다.","ground_truth":"true","official_number":"2021","evidence_url":"https://www.nasa.gov/news-release/touchdown-nasas-mars-perseverance-rover-safely-lands-on-red-planet/","source_fact":"Perseverance touched down February 18, 2021"},
+    {"id":"P02","claim":"퍼서비어런스 로버는 2020년에 화성에 착륙했다.","ground_truth":"false","official_number":"2021","evidence_url":"https://www.nasa.gov/news-release/touchdown-nasas-mars-perseverance-rover-safely-lands-on-red-planet/","source_fact":"Perseverance touched down February 18, 2021"},
+    {"id":"P03","claim":"퍼서비어런스 로버의 착륙지는 제제로 분화구다.","ground_truth":"true","official_number":null,"evidence_url":"https://www.nasa.gov/news-release/touchdown-nasas-mars-perseverance-rover-safely-lands-on-red-planet/","source_fact":"Perseverance landed in Jezero Crater"},
+    {"id":"P04","claim":"퍼서비어런스 로버가 착륙할 때 인제뉴어티 헬리콥터는 이미 화성에서 시험 비행을 마쳤다.","ground_truth":"false","official_number":null,"evidence_url":"https://www.nasa.gov/news-release/touchdown-nasas-mars-perseverance-rover-safely-lands-on-red-planet/","source_fact":"Currently attached to the belly of Perseverance; flight test phase was future"}
+  ]
+}
