@@ -1,0 +1,26 @@
+{
+  "method": "IMG-01",
+  "checkpoint": "animagine-xl-4.0-opt.safetensors",
+  "seed_start": 1000,
+  "repeats": 4,
+  "score_rule": "For prompts that explicitly request a white background, at least half of the pixels in four corner patches (each 1/16 of image width and height) must have all RGB channels >= 240. This is a background proxy, not a human quality verdict.",
+  "cases": [
+    {
+      "task": "IMG-01",
+      "prompt": "a friendly robot mascot character holding a wrench, clean flat vector illustration, bold outlines, simple solid colors, white background, centered, mascot logo style",
+      "white_background_requested": true,
+      "minimum_white_corner_fraction": 0.5
+    },
+    {
+      "task": "IMG-02",
+      "prompt": "a cozy home office desk with a laptop showing charts, a coffee mug and a small plant, warm flat illustration, blog thumbnail style, soft pastel colors, clean composition",
+      "white_background_requested": false
+    },
+    {
+      "task": "IMG-03",
+      "prompt": "a cute smiling cloud character with a small lightning bolt, kawaii sticker illustration, thick clean outline, glossy shading, white background, app icon style",
+      "white_background_requested": true,
+      "minimum_white_corner_fraction": 0.5
+    }
+  ]
+}
