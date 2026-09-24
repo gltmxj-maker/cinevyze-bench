@@ -17,7 +17,7 @@ CASES = ROOT / "quant_rebuild_cases.json"
 DEFAULT_RUN = ROOT / "test_runs/quant-q4-qwen2.5-20260924"
 
 
-def load_cases() -> list[dict]:
+def load_cases(*, source_run: Path | None = None) -> list[dict]:
     data = json.loads(CASES.read_text(encoding="utf-8"))
     cases = data["cases"]
     if [c["task"] for c in cases] != ["TXT-01", "TXT-02", "TXT-04"]:
@@ -25,9 +25,17 @@ def load_cases() -> list[dict]:
     if any(not c.get("prompt") for c in cases):
         raise ValueError("입력 누락")
     import yaml
-    prior = yaml.safe_load((ROOT / data["source_run"]).read_text(encoding="utf-8"))["runs"]
-    if [prior[i]["input"] for i in (0, 2, 4)] != [c["prompt"] for c in cases]:
-        raise ValueError("7월 원기록의 고정 입력과 불일치")
+    source = source_run if source_run is not None else ROOT / data["source_run"]
+    if source.is_file():
+        prior_doc = yaml.safe_load(source.read_text(encoding="utf-8"))
+        if prior_doc.get("model") != MODEL:
+            raise ValueError("7월 원기록 모델 불일치")
+        prior = prior_doc["runs"]
+        if [prior[i]["input"] for i in (0, 2, 4)] != [c["prompt"] for c in cases]:
+            raise ValueError("7월 원기록의 고정 입력과 불일치")
+    elif source_run is None and (ROOT / "test_runs/ollama-qwen2.5:7b-instruct-q4_k_m-20260726").is_dir():
+        raise FileNotFoundError(f"이 저장소의 7월 고정 입력 원기록 없음: {source}")
+    # 공개 저장소는 비공개 test_runs를 배포하지 않는다. 커밋된 cases JSON이 재현 입력이다.
     return cases
 
 
