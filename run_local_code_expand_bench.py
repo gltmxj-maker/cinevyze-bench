@@ -76,6 +76,28 @@ def write_run_yaml(run: Path, plan: dict, cases_path: Path, cases_sha: str, reco
     os.replace(tmp, run / "run.yaml")
 
 
+def record_score_change(run: Path, *, old_sha: str, new_sha: str, reason: str,
+                        before: dict, after: dict) -> None:
+    """측정 후 채점기 교정 이력을 하네스가 run.yaml에 원자적으로 기록한다."""
+    path = Path(run) / "run.yaml"
+    meta = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if meta.get("generated_by") != WRITER or not meta.get("runs"):
+        raise ValueError("하네스 런 정의 아님")
+    if meta.get("condition_changes"):
+        raise ValueError("채점 변경이 이미 기록됨")
+    if not reason.strip() or len(old_sha) != 64 or len(new_sha) != 64:
+        raise ValueError("채점 변경 근거·SHA256 누락")
+    meta["condition_changes"] = [{
+        "kind": "scorer_correction", "reason": reason,
+        "old_scorer_sha256": old_sha, "new_scorer_sha256": new_sha,
+        "before_by_model": before, "after_by_model": after,
+        "rechecked_runs": len(meta["runs"]),
+    }]
+    tmp = path.with_suffix(".yaml.tmp")
+    tmp.write_text(yaml.safe_dump(meta, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def _verify_record(run: Path, item: dict, task: dict, stem: str) -> str:
     out = run / f"{stem}-output.txt"
     log = run / f"{stem}-invocation.log"
@@ -261,8 +283,23 @@ def main() -> int:
     parser.add_argument("--base-url", default="http://127.0.0.1:11434")
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--rescore", action="store_true")
+    parser.add_argument("--record-score-correction", action="store_true")
+    parser.add_argument("--old-scorer-sha256", default="")
+    parser.add_argument("--old-aggregate", type=Path)
+    parser.add_argument("--change-reason", default="")
     args = parser.parse_args()
-    if args.rescore:
+    if args.record_score_correction:
+        if not args.old_aggregate or not args.old_scorer_sha256 or not args.change_reason:
+            parser.error("score correction requires --old-aggregate, --old-scorer-sha256, --change-reason")
+        before = json.loads(args.old_aggregate.read_text(encoding="utf-8"))["by_model"]
+        after = rescore_run(args.run_dir, cases_path=args.cases)
+        scorer_sha = sha((ROOT / "code_expand_score.py").read_bytes())
+        record_score_change(args.run_dir, old_sha=args.old_scorer_sha256,
+                            new_sha=scorer_sha, reason=args.change_reason,
+                            before=before, after=after["by_model"])
+        rescore_run(args.run_dir, cases_path=args.cases)
+        print(json.dumps(after, ensure_ascii=False))
+    elif args.rescore:
         print(json.dumps(rescore_run(args.run_dir, cases_path=args.cases), ensure_ascii=False))
     else:
         run_live(args.run_dir, args.base_url, args.timeout, args.cases)

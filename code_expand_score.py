@@ -36,16 +36,19 @@ def extract_code(response: str) -> tuple[str | None, str]:
         return None, "unparseable"
 
 
-def _execute(code: str, function: str, args: list) -> tuple[object, bool, str | None]:
+def _execute(code: str, function: str, args: list) -> tuple[object, str | None, bool, bool, str | None]:
     driver = (
         "import copy, json\n" + code + "\n"
         "_args = " + repr(args) + "\n"
         "_before = copy.deepcopy(_args)\n"
         "try:\n"
         "    _value = " + function + "(*_args)\n"
-        "    _data = {'actual': _value, 'mutated': _args != _before, 'error': None}\n"
+        "    _same = any(_value is _arg for _arg in _args)\n"
+        "    _data = {'actual': _value, 'actual_type': type(_value).__name__, "
+        "'same_input_object': _same, 'mutated': _args != _before, 'error': None}\n"
         "except Exception as _exc:\n"
-        "    _data = {'actual': None, 'mutated': _args != _before, "
+        "    _data = {'actual': None, 'actual_type': None, 'same_input_object': False, "
+        "'mutated': _args != _before, "
         "'error': type(_exc).__name__ + ': ' + str(_exc)[:120]}\n"
         "print('CODE_EXPAND_RESULT=' + json.dumps(_data, ensure_ascii=False, default=repr))\n"
     )
@@ -56,19 +59,22 @@ def _execute(code: str, function: str, args: list) -> tuple[object, bool, str | 
             proc = subprocess.run([sys.executable, "-I", "-S", str(script)], cwd=temp,
                                   text=True, capture_output=True, timeout=4)
         except subprocess.TimeoutExpired:
-            return None, False, "timeout"
+            return None, None, False, False, "timeout"
     if proc.returncode:
-        return None, False, (proc.stderr.strip().splitlines()[-1][:160]
+        return None, None, False, False, (proc.stderr.strip().splitlines()[-1][:160]
                              if proc.stderr.strip() else f"exit {proc.returncode}")
     markers = [line.removeprefix("CODE_EXPAND_RESULT=") for line in proc.stdout.splitlines()
                if line.startswith("CODE_EXPAND_RESULT=")]
     if not markers:
-        return None, False, "result marker absent"
+        return None, None, False, False, "result marker absent"
     try:
         value = json.loads(markers[-1])
     except json.JSONDecodeError:
-        return None, False, "invalid result JSON"
-    return value.get("actual"), bool(value.get("mutated")), value.get("error")
+        return None, None, False, False, "invalid result JSON"
+    if not isinstance(value, dict):
+        return None, None, False, False, "invalid result object"
+    return (value.get("actual"), value.get("actual_type"), bool(value.get("same_input_object")),
+            bool(value.get("mutated")), value.get("error"))
 
 
 def score_response(task: dict, response: str) -> dict:
@@ -85,16 +91,18 @@ def score_response(task: dict, response: str) -> dict:
             pass
     results = []
     for case in task["cases"]:
-        actual, mutated, error = (None, False, "code unavailable")
+        actual, actual_type, same_input_object, mutated, error = (None, None, False, False, "code unavailable")
         if syntax_valid and defines_function:
-            actual, mutated, error = _execute(code, task["function"], case["args"])
+            actual, actual_type, same_input_object, mutated, error = _execute(code, task["function"], case["args"])
         elif syntax_valid:
             error = "required function absent"
-        passed = (error is None and type(actual) is type(case["expected"])
+        passed = (error is None and actual_type == type(case["expected"]).__name__
                   and actual == case["expected"]
-                  and (not task["require_no_mutation"] or not mutated))
+                  and (not task["require_no_mutation"] or (not mutated and not same_input_object)))
         results.append({"case_id": case["id"], "expected": case["expected"],
-                        "actual": actual, "mutated": mutated, "error": error, "passed": passed})
+                        "actual": actual, "actual_type": actual_type,
+                        "same_input_object": same_input_object,
+                        "mutated": mutated, "error": error, "passed": passed})
     example_shown = (not task.get("example_required")
                      or bool(re.search(r"\[\s*3\s*,\s*2\s*,\s*1\s*\]", response)))
     first_failure = next((case for case in results if not case["passed"]), None)
