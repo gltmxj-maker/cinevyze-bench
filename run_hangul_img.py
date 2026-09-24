@@ -19,6 +19,7 @@ import datetime as dt
 import json
 import os
 import platform
+import re
 import subprocess
 import time
 import urllib.error
@@ -27,9 +28,10 @@ from pathlib import Path
 from typing import Any
 
 from hangul_score import score_one, score_run_dir
+from live_mark import mark
 from ocr_score import _lev, _norm
 
-HARNESS_VERSION = "1.0"
+HARNESS_VERSION = "1.1"
 CALIBRATION_FONT = Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc")
 DEFAULT_CASES = Path(__file__).with_name("hangul_img_cases.json")
 DEFAULT_RUN_DIR = Path(__file__).with_name("test_runs") / "sdxl-hangul-text-20260731"
@@ -224,7 +226,11 @@ def ocr(image_path: Path, lang: str, requested: str = "", timeout: int = 120
         target = _norm(requested, False) if requested else ""
         return (_lev(list(target), list(_norm(text, False))) if target else 0, len(text))
 
-    best_psm, best_text = min(variants.items(), key=rank)
+    # An empty reading is not evidence that the image has no text when another
+    # layout mode reads glyphs. Select among nonempty readings first, then use
+    # target distance to choose the most generous transcription.
+    candidates = {psm: text for psm, text in variants.items() if _norm(text, False)}
+    best_psm, best_text = min((candidates or variants).items(), key=rank)
     meta = {"lang": lang, "selected_psm": best_psm, "oem": "1", "variants": variants,
             "proc_s": round(time.monotonic() - started, 3)}
     return best_text, meta, None
@@ -262,7 +268,7 @@ def calibrate_ocr(run_dir: Path, data: dict[str, Any]) -> dict[str, Any]:
     summary = {
         "note": "합성 렌더 텍스트에 동일 OCR 설정 적용 — 여기서 못 읽히면 그건 모델 실패가 아니라 계측 한계",
         "font": str(CALIBRATION_FONT),
-        "ocr": "tesseract --psm 7 --oem 1",
+        "ocr": "tesseract --oem 1 (psm 7, 6, 11, 3; nonempty closest transcript)",
         "by_script": {
             script: {
                 "exact": sum(r["exact"] for r in rows if r["script"] == script),
@@ -298,6 +304,18 @@ def reocr(run_dir: Path) -> dict[str, Any]:
             changed += 1
         invocation["ocr_text"] = recognised
         invocation["ocr_meta"] = meta
+        transcript_file = invocation.get("transcript_file")
+        if transcript_file:
+            transcript_path = run_dir / transcript_file
+            if transcript_path.exists():
+                transcript = transcript_path.read_text(encoding="utf-8")
+                revised = re.sub(r"\[OCR TEXT\]\n.*?\n\n\[OCR META\]\n.*\Z",
+                                 lambda _m: ("[OCR TEXT]\n" + recognised + "\n\n[OCR META]\n"
+                                             + json.dumps(meta, ensure_ascii=False, indent=2) + "\n"),
+                                 transcript, flags=re.S)
+                if revised == transcript and "[OCR TEXT]" not in transcript:
+                    raise ValueError(f"OCR 구획이 없는 전사 파일: {transcript_path}")
+                transcript_path.write_text(revised, encoding="utf-8")
         if error:
             invocation["infra_error"] = error
         invocation_path.write_text(
@@ -371,7 +389,8 @@ def write_run_yaml(run_dir: Path, cases_path: Path) -> None:
         "axis": "writing_system",
         "generation": {"steps": STEPS, "cfg": CFG, "sampler": SAMPLER,
                        "resolution": f"{RESOLUTION}x{RESOLUTION}", "negative_prompt": NEGATIVE},
-        "scoring": {"ocr": "tesseract --psm 7 --oem 1", "langs": OCR_LANGS,
+        "scoring": {"ocr": "tesseract --oem 1 (psm 7, 6, 11, 3; nonempty closest transcript)",
+                    "psm_modes": list(OCR_PSMS), "langs": OCR_LANGS,
                     "cases_file": cases_path.name,
                     "ocr_calibration": "calibration.json"},
         "environment": {
@@ -402,6 +421,7 @@ def run_benchmark(args: argparse.Namespace) -> int:
         summary = reocr(args.run_dir)
         _, aggregate = score_run_dir(args.run_dir)
         print(json.dumps({**summary, "scripts": aggregate["scripts"]}, ensure_ascii=False, indent=2))
+        mark("agg", f"OCR 재판독 집계 — {summary['reread']}장 · 바뀐 판독 {summary['changed']}장 · 한글 정확 일치 {aggregate['scripts']['ko']['exact']['hits']}/{aggregate['scripts']['ko']['exact']['total']} · 영문 정확 일치 {aggregate['scripts']['en']['exact']['hits']}/{aggregate['scripts']['en']['exact']['total']}")
         return 0
 
     if args.calibrate:
@@ -429,8 +449,14 @@ def run_benchmark(args: argparse.Namespace) -> int:
     chunk_limited = len(pending) < pending_total
     print(f"planned={len(plan)} existing={len(plan) - pending_total} "
           f"pending_total={pending_total} running_now={len(pending)}")
+    first_failure_marked = False
+    first_infra_marked = False
+    previous_checkpoint = None
 
     for position, row in enumerate(pending, 1):
+        if previous_checkpoint and row["checkpoint"] != previous_checkpoint:
+            mark("turn", f"체크포인트 전환 — {previous_checkpoint} → {row['checkpoint']}")
+        previous_checkpoint = row["checkpoint"]
         next_id += 1
         prompt = build_prompt(data["prompt_template"], row["text"])
         # Seed depends only on the pair and repeat, so the two scripts of a pair share it.
@@ -481,6 +507,13 @@ def run_benchmark(args: argparse.Namespace) -> int:
         write_run_yaml(args.run_dir, args.cases)
         print(f"[{position}/{len(pending)}] {row['key']} '{row['text']}' → OCR '{recognised[:30]}'"
               + (f" ERROR={infra_error}" if infra_error else ""), flush=True)
+        if infra_error and not first_infra_marked:
+            mark("infra", f"첫 계측 오류 — {row['key']} · {infra_error}")
+            first_infra_marked = True
+        if image is not None and not infra_error and not first_failure_marked:
+            if not score_one(row["text"], recognised)["exact"]:
+                mark("break", f"첫 문자열 불일치 — {row['pair_id']}/{row['script']} · 요청 {row['text']} · OCR {recognised or '(빈 판독)'}")
+                first_failure_marked = True
 
     write_run_yaml(args.run_dir, args.cases)
     results, aggregate = score_run_dir(args.run_dir)
@@ -497,6 +530,7 @@ def run_benchmark(args: argparse.Namespace) -> int:
         json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     print(json.dumps(status, ensure_ascii=False, indent=2))
+    mark("agg", f"집계 완료 — {len(results)}장 · 한글 정확 일치 {aggregate['scripts']['ko']['exact']['hits']}/{aggregate['scripts']['ko']['exact']['total']} · 영문 정확 일치 {aggregate['scripts']['en']['exact']['hits']}/{aggregate['scripts']['en']['exact']['total']} · 계측 오류 {infra_count}건")
     if status["infra_rate"] > status["infra_limit"]:
         return 4
     if status["chunk_limited"] and not status["complete"]:
